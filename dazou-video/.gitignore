@@ -1,0 +1,8 @@
+out/
+tmp/
+node_modules/
+fonts/
+tex/
+audio/
+*.mp4
+*.wav

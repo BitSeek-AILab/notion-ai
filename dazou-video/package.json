@@ -1,0 +1,16 @@
+{
+  "name": "dazou-video",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "大走理论 · 走路科普竖屏短视频（1080×1920, 30 fps）— 纯代码逐帧渲染",
+  "scripts": {
+    "assets": "bash tools/fetch_assets.sh",
+    "sfx": "python3 tools/sfx.py",
+    "stills": "node render.mjs stills",
+    "video": "node render.mjs video --workers 3"
+  },
+  "dependencies": {
+    "playwright": "^1.63.0"
+  }
+}
