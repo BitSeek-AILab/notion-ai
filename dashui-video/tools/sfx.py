@@ -3,7 +3,7 @@
 
 所有音效均为程序合成（numpy / scipy，不使用任何采样），按影片的节拍网格放置，
 叠加在用户提供的音乐下（音乐从 0 s 开始，截断至视频长度并淡出），
-最后母带处理到约 -12 LUFS、真峰值 ≤ -1 dBTP。
+最后母带处理到约 -12 LUFS、真峰值 ≤ -1 dBTP（wav 限幅到 -2 dBTP，AAC 编码后仍 ≤ -1）。
 
   python3 tools/sfx.py [--music audio/music.mp3] [--out out/audio_master.wav]
 
@@ -417,6 +417,7 @@ def main():
     ap.add_argument('--music', default=str(root / 'audio' / 'music.mp3'))
     ap.add_argument('--out', default=str(root / 'out' / 'audio_master.wav'))
     ap.add_argument('--target', type=float, default=-12.0)
+    ap.add_argument('--ceiling', type=float, default=-2.0, help='wav 真峰值上限；留 1 dB 给 AAC 编码过冲')
     a = ap.parse_args()
 
     music = load_music(a.music)
@@ -463,7 +464,7 @@ def main():
 
     g_db = a.target - lufs(mix)
     for _ in range(6):
-        y, gain = limiter(mix * 10 ** (g_db / 20))
+        y, gain = limiter(mix * 10 ** (g_db / 20), a.ceiling)
         L = lufs(y)
         if abs(L - a.target) < 0.05: break
         g_db += a.target - L
