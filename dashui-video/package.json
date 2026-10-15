@@ -1,0 +1,16 @@
+{
+  "name": "dashui-video",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "大水理论 · 喝水科普竖屏短视频（1080×1920, 30 fps, 45.2 s）— 纯代码逐帧渲染",
+  "scripts": {
+    "assets": "bash tools/fetch_assets.sh",
+    "sfx": "python3 tools/sfx.py",
+    "stills": "node render.mjs stills",
+    "video": "node render.mjs video --workers 2"
+  },
+  "dependencies": {
+    "playwright": "^1.63.0"
+  }
+}

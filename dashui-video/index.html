@@ -1,0 +1,24 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>大水理论 · 喝水科普 — 45 s vertical motion film</title>
+<style>
+  html, body { margin: 0; padding: 0; background: #f4e9d0; overflow: hidden; }
+  canvas { display: block; width: 1080px; height: 1920px; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script type="module">
+  import { init, render, W, H, FPS, DUR } from './js/film.js';
+  window.DEMO = { width: W, height: H, fps: FPS, duration: DUR };
+  (async () => {
+    await init(document.getElementById('c'), window.devicePixelRatio || 1);
+    window.renderAt = async (t) => { render(t); };
+    render(0);
+    window.__ready = true;
+  })().catch((e) => { console.error('init failed', e && e.stack || e); });
+</script>
+</body>
+</html>
