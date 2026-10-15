@@ -9,6 +9,7 @@ import { REG, T, inked, stroke, dot, mixHex, drawSweat, footDense, drawFoot, dra
   drawClock, clockDense, batteryDense, drawBattery, WATCH_R, watchDense, drawWatch, bulbDense, drawBulb, SW, switchDense, drawSwitch,
   drawBowl, bowlDense, scribbleDense, drawSeal, brainDense, drawBrain, face2, drawCheckbox, drawArrow, drawFatArrow, ecgPts } from './shapes.js';
 import { twinkle, starBurst, speedLines, puff } from './fx.js';
+import { blobTrack, drawBackdrop, sunburst, confetti, vignette, invertFrame, heart } from './fx2.js';
 import { G, poseStand, poseWalk, poseSit, poseLie, poseBig, poseJump, mixPose, solve, drawGuy, N_ST, rs, profile, lerpStroke, drawStroke,
   calli, guyStrokes } from './guy.js';
 
@@ -186,6 +187,8 @@ function drawBadge(x, y, R, s, fill, str, D, k, o = {}) {
   c.restore();
 }
 // big number with a fat arrow in front (dir 1 = down)
+// slam-in scale: comes from the lens (2.3×), hits the paper, overshoots, settles
+const slam = (t, t0) => (t < t0 ? 0 : K(t, [[t0, 2.3], [t0 + 0.09, 0.9, 'in2'], [t0 + 0.17, 1.05, 'out2'], [t0 + 0.27, 1, 'io2']]));
 function bigNum(str, x, y, size, s, fill, dir, D, k) {
   if (s <= 0.01) return;
   const m = measure(str, 'KL', size).w, aw = size * 0.55, gap = size * 0.08, tot = aw + gap + m;
@@ -265,11 +268,68 @@ function sceneSofa(t, tq, D) {
   c.restore();
   drawPhone(c, T(hand[0], hand[1] - 6, 1.0, Math.PI + 0.25), D, 140, { scroll: tq * 2.2 });
   c.restore();
-  // twinkling "likes" from the phone on the beats (doom-scrolling)
-  [[hand[0] + 70, hand[1] - 90, bt(0)], [hand[0] - 70, hand[1] - 120, bt(1)], [hand[0] + 40, hand[1] - 170, bt(2)]].forEach(([x0, y0, tb], i) => {
-    const [x, y] = gp(x0, y0);
-    const u = clamp((tq - tb) / 0.18); if (u > 0 && t < FLAT - 0.1) twinkle(c, x, y, 26 * E.outBack(u, 2.5) * vanish(tq, tb + 0.4, 0.2), D, 150 + i, PAL.pink, 0.3 * i);
-  });
+  // remembered for the night layer (phone light + "likes" twinkles are drawn above the dark overlay)
+  NIGHT.hand = gp(hand[0], hand[1]); NIGHT.face = gp(g.hc[0], g.hc[1]);
+}
+// ------------------------------------------------------------------ v2: the opening is at night – a dark room lit only by the phone
+const NIGHT = { hand: [640, 960], face: [560, 1040] };
+const NAVY = '#1a2140';
+const HOLE = { x: 540, y: FLOOR - 420, R: 1500, d: 0.34 };
+function nightFX(t, tq, D) {
+  if (t >= B[1] + HOLE.d + 0.05) return;
+  const R = t < B[1] ? 0 : HOLE.R * E.out2(clamp((t - B[1]) / HOLE.d));
+  const glow = 1 - clamp((t - (FLAT - 0.14)) / 0.16);
+  const [hx, hy] = glow > 0 ? NIGHT.hand : [540, 1000];
+  const hole = R > 0 ? boil(circlePts(HOLE.x, HOLE.y, R, 120), D * 13 + 5, 9, 150) : null;
+  c.save();
+  c.beginPath(); c.rect(-400, -400, W + 800, H + 800);
+  if (hole) { hole.forEach((q, i) => (i ? c.lineTo(q[0], q[1]) : c.moveTo(q[0], q[1]))); c.closePath(); }
+  c.clip('evenodd');
+  c.globalCompositeOperation = 'multiply';
+  const gr = c.createRadialGradient(hx, hy, 0, hx, hy, 950);
+  gr.addColorStop(0, mixHex(NAVY, '#dfe7ff', glow));
+  gr.addColorStop(0.25, mixHex(NAVY, '#8798cf', glow));
+  gr.addColorStop(0.6, mixHex(NAVY, '#2f3a66', glow));
+  gr.addColorStop(1, NAVY);
+  c.fillStyle = gr; c.fillRect(-400, -400, W + 800, H + 800);
+  c.restore();
+  if (glow > 0.01) { // the screen itself glows
+    c.save(); c.globalCompositeOperation = 'screen';
+    const g2 = c.createRadialGradient(hx, hy, 0, hx, hy, 300);
+    g2.addColorStop(0, `rgba(110,160,255,${0.6 * glow})`); g2.addColorStop(1, 'rgba(110,160,255,0)');
+    c.fillStyle = g2; c.fillRect(hx - 300, hy - 300, 600, 600);
+    c.restore();
+    // "likes" popping out of the phone on the beats (doom-scrolling), floating up
+    [[95, -95, bt(0)], [-95, -120, bt(1)], [60, -175, bt(2)]].forEach(([dx, dy, tb], i) => {
+      const u = clamp((tq - tb) / 0.18), up = 60 * E.out2(clamp((tq - tb) / 0.6));
+      if (u > 0 && t < FLAT - 0.1) heart(c, hx + dx, hy + dy - up, 40 * E.outBack(u, 2.5) * vanish(tq, tb + 0.45, 0.2), D, 150 + i, PAL.pink, (i - 1) * 0.25);
+    });
+  }
+  // the flatline glows like a heart monitor
+  if (t >= FLAT - 0.04 && t < B[1]) {
+    const u = E.out3(clamp((t - (FLAT - 0.04)) / 0.12));
+    const L = [[540 - 640 * u, FLOOR], [540 + 640 * u, FLOOR]];
+    c.save();
+    c.shadowColor = 'rgba(70,255,150,0.95)'; c.shadowBlur = 30;
+    inkStroke(c, L, { seed: D * 13 + 170, w: 9, amp: 1.2, t0: 4, t1: 4, color: '#39e07c' });
+    c.shadowBlur = 0;
+    inkStroke(c, L, { seed: D * 13 + 170, w: 3.2, amp: 1.2, t0: 4, t1: 4, color: '#e2fff0' });
+    const x = lerp(540, 1100, clamp((t - FLAT) / (B[1] - FLAT)));
+    const g3 = c.createRadialGradient(x, FLOOR, 0, x, FLOOR, 70);
+    g3.addColorStop(0, 'rgba(150,255,190,0.9)'); g3.addColorStop(1, 'rgba(150,255,190,0)');
+    c.globalCompositeOperation = 'screen'; c.fillStyle = g3; c.fillRect(x - 70, FLOOR - 70, 140, 140);
+    c.globalCompositeOperation = 'source-over';
+    dot(c, x, FLOOR, 11, '#f2fff7', D, 172);
+    c.restore();
+  }
+  // B1: the light bursts out of the heartbeat spike – an orange shock ring rides the edge
+  if (hole && t < B[1] + HOLE.d) {
+    const u = clamp((t - B[1]) / HOLE.d);
+    c.save(); c.globalAlpha *= 1 - E.in2(u);
+    inkLoop(c, hole, { seed: D * 13 + 6, w: lerp(54, 14, u), amp: 1.5, heavy: 0, color: PAL.org });
+    inkLoop(c, boil(circlePts(HOLE.x, HOLE.y, R * 0.86, 100), D * 13 + 8, 7, 150), { seed: D * 13 + 9, w: lerp(22, 6, u), amp: 1.5, heavy: 0, color: PAL.yel });
+    c.restore();
+  }
 }
 function sceneFlat(t, tq, D) {
   if (t < FLAT - 0.04 || t >= B[1]) return;
@@ -329,7 +389,8 @@ function textHook(t, tq, D) {
     const grey = t >= FLAT;
     const bp = beatPulse(tq, [bt(0), bt(1), bt(2)], 10), sq = grey ? pulse(t, FLAT, 10) : 0;
     c.save(); c.translate(540, 470); c.scale(1 + 0.05 * bp + 0.12 * sq, 1 + 0.05 * bp - 0.38 * sq); c.translate(-540, -470);
-    letters(c, '弱者躺平', { font: 'KL', size: 160, x: 540, y: 470 + (grey ? 16 * E.out3(clamp((t - FLAT) / 0.1)) : 0), fill: grey ? PAL.greyL : PAL.sofa, ink: PAL.ink, inkW: 7, shadow: PAL.ink, D, seed: 11, anim: anim0 });
+    if (!grey) { c.shadowColor = 'rgba(170,150,255,0.55)'; c.shadowBlur = 34; }
+    letters(c, '弱者躺平', { font: 'KL', size: 160, x: 540, y: 470 + (grey ? 16 * E.out3(clamp((t - FLAT) / 0.1)) : 0), fill: grey ? PAL.greyL : '#cdc1f5', ink: PAL.ink, inkW: 7, shadow: PAL.ink, D, seed: 11, anim: anim0 });
     c.restore();
   }
   if (t >= B[1] && t < B[1] + 0.5) letters(c, '弱者躺平', { font: 'KL', size: 160, x: 540, y: 486, fill: PAL.greyL, ink: PAL.ink, inkW: 7, shadow: PAL.ink, D, seed: 11, anim: flyOut(t, B[1], 0.5, { seed: 4 }) });
@@ -643,7 +704,7 @@ function sceneCurve(t, tq, D) {
   HL('饭后一直坐着', t, B[7] + 0.06, B[8] - 0.1, 380, { D, seed: 790, size: 112 });
   HL('血糖一路飙升', t, bt(29), B[8] - 0.1, 520, { D, seed: 791, size: 120, allFill: PAL.red, punch: 0.05 * beatPulse(tq, [bt(30), JUMP], 10) });
   HL('饭后血糖峰值', t, LAND + 0.02, B[9] - 0.1, 380, { D, seed: 792, size: 116 });
-  if (t >= LAND && t < B[9] + 0.1) bigNum('58%', 540, 575, 200, appear(t, LAND + 0.06, 0.24, 2.6) * vanish(t, B[9] - 0.1, 0.12), PAL.grn, 1, D, 793);
+  if (t >= LAND + 0.02 && t < B[9] + 0.1) { c.save(); c.globalAlpha *= clamp((t - LAND - 0.02) / 0.05); bigNum('58%', 540, 610, 255, slam(t, LAND + 0.02) * vanish(t, B[9] - 0.1, 0.12), PAL.grn, 1, D, 793); c.restore(); }
   SUB('对比一直坐着不动', t, LAND + 0.35, B[9] - 0.1, 1440, { D, seed: 795 });
   HL('那每天', t, B[9] + 0.06, B[10] - 0.08, 380, { D, seed: 796, size: 112 });
   HL('走多少步才够？', t, bt(37), B[10] - 0.08, 520, { D, seed: 797, size: 120, color: { 1: PAL.org, 2: PAL.org, 3: PAL.org } });
@@ -679,7 +740,7 @@ function sceneWatch(t, tq, D) {
   }
   HL('每天 7000 步', t, B[10] + 0.06, B[11] - 0.1, 400, { D, seed: 870, size: 140, color: { 2: PAL.org, 3: PAL.org, 4: PAL.org, 5: PAL.org } });
   HL('全因死亡风险', t, B[11] + 0.02, B[12] - 0.08, 370, { D, seed: 871, size: 104 });
-  if (t >= B[11] && t < B[12] + 0.1) bigNum('47%', 540, 540, 180, appear(t, B[11] + 0.08, 0.24, 2.6) * vanish(t, B[12] - 0.1, 0.12), PAL.grn, 1, D, 872);
+  if (t >= B[11] + 0.04 && t < B[12] + 0.1) { c.save(); c.globalAlpha *= clamp((t - B[11] - 0.04) / 0.05); bigNum('47%', 540, 565, 232, slam(t, B[11] + 0.04) * vanish(t, B[12] - 0.1, 0.12), PAL.grn, 1, D, 872); c.restore(); }
   SUB('对比每天 2000 步', t, bt(45), B[12] - 0.08, 1440, { D, seed: 874, size: 60 });
   SUB('《柳叶刀·公共卫生》2025', t, bt(45) + E8, B[12] - 0.08, 1515, { D, seed: 875, size: 46 });
 }
@@ -697,8 +758,8 @@ function sceneBrain(t, tq, D) {
     const u = ioL((t - B[13]) / 0.3);
     drawMorph(morphW(xf(brainDense(), { x: BR.x, y: BR.y, sx: BR.s, sy: BR.s }), xf(bulbDense(), { x: 540, y: 1040, sx: 1, sy: 1 }), u, 'brain-bulb'), mixHex(PAL.pink, PAL.hi, u), D, 890);
   }
-  drawStat(540, 1340, appear(t, bt(49), 0.24, 2.4) * vanish(t, B[13] - 0.1, 0.12), '痴呆风险', '38%', D, 900, { r: -0.02 });
-  drawStat(540, 1480, appear(t, bt(50), 0.24, 2.4) * vanish(t, B[13] - 0.1, 0.12), '抑郁症状', '22%', D, 910, { r: 0.02 });
+  drawStat(540, 1340, 1.12 * appear(t, bt(49), 0.24, 2.4) * vanish(t, B[13] - 0.1, 0.12), '痴呆风险', '38%', D, 900, { r: -0.02 });
+  drawStat(540, 1490, 1.12 * appear(t, bt(50), 0.24, 2.4) * vanish(t, B[13] - 0.1, 0.12), '抑郁症状', '22%', D, 910, { r: 0.02 });
   HL('大脑也受益！', t, B[12] + 0.06, B[13] - 0.08, 420, { D, seed: 920, size: 126 });
 }
 
@@ -846,43 +907,78 @@ function sceneTips(t, tq, D) {
       if (u < 1) drawMorph(morphW(xf(scribbleDense(), { x: SCR.x, y: SCR.y, sx: SCR.s, sy: SCR.s }), xf(bulbDense(), { x: TBULB.x, y: TBULB.y, sx: TBULB.s, sy: TBULB.s }), u, 'scrib-bulb', 260), u > 0.4 ? mixHex(PAL.hi, PAL.yel, u) : null, D, 1170, { w: 9 });
       else drawBulb(c, T(TBULB.x, TBULB.y, TBULB.s, 0.03 * Math.sin(tq * 3)), D, E.out3(clamp((t - UNT - 0.3) / 0.15)));
     }
-    // a walker strolls underneath once the idea lands
-    const gs = 0.42 * appear(t, UNT, 0.24, 2.2);
-    if (gs > 0.01) { footTrail(t, tq, UNT + BEAT, B[20], 560, 1400, 0.18, D, 1180, { gs: 0.42 }); drawGuy(c, { x: 540, y: 1360 - HIPH(gs), s: gs }, poseWalk(walkPh(tq), { face: 'grin' }), { D, k: 1190, w: 15, face: 'grin' }); }
+    // footprints walk a lap beneath the idea (16ths), left → right
+    for (let i = 0; i < 6; i++) {
+      const tf = UNT + (2 + i) * E16, a = appear(tq, tf, 0.16, 2.6) * vanish(t, B[20] - 0.06 + i * 0.01, 0.1);
+      if (a <= 0.01) continue;
+      const th = lerp(2.75, 0.39, i / 5), left = i % 2 === 0, R = 300 + (left ? -17 : 17);
+      const dir = Math.atan2(-Math.cos(th), Math.sin(th));
+      drawFoot(c, T(540 + Math.cos(th) * R, 965 + Math.sin(th) * R, 0.27 * a, dir + Math.PI / 2, left ? -1 : 1, 1), D, 1180 + i * 3, { w: 3.2 });
+    }
   }
   tipTitle('1', '每坐 30 分钟', '起来走 5 分钟', t, B[17] + 0.02, bt(70), B[18] - 0.1, D, 1200, { 2: PAL.org, 3: PAL.org }, { 3: PAL.org });
   tipTitle('2', '每天走够', '7000 步', t, B[18] + 0.02, bt(73), B[19] - 0.1, D, 1210, null, { 0: PAL.org, 1: PAL.org, 2: PAL.org, 3: PAL.org });
   tipTitle('3', '想不通？', '出去走走', t, B[19] + 0.02, UNT, B[20] - 0.1, D, 1220, { 3: PAL.red }, { 2: PAL.org, 3: PAL.org });
 }
 
-// ------------------------------------------------------------------ S20 – S22: 今天，你大走了吗？ (B20 – end)
-const GEND = { x: 540, s: 0.8 };
+// ------------------------------------------------------------------ S20 – S22: 今天，你大走了吗？ (B20 – end) · v2: sunrise
+// the idea (bulb) rolls down behind the horizon and rises as the sun; a new walker draws himself on and strides towards it
+const GEND = { x: 380, s: 0.8 };
 const GEY = FLOOR - HIPH(GEND.s);
 const STOP = B[22];
+const SUN = { x: 770, R: 185 }, SUNC = '#ffa92e';
+const sunY = (t) => lerp(1228, 1082, E.io2(clamp((t - B[20] - 0.32) / (DUR - B[20] - 0.32))));
+function skyClip() { c.beginPath(); c.rect(-400, -400, W + 800, FLOOR - 4 + 400); c.clip(); }
 function sceneEnd(t, tq, D) {
   if (t < B[20]) return;
-  // the bulb shrinks into the walker's head, then his body draws on below it
   const wp = t < STOP ? poseWalk(walkPh(tq), { stride: 0.46, arm: 0.7, face: 'grin' }) : mixPose(poseWalk(walkPh(STOP), { face: 'grin' }), poseStand({ face: 'wink' }), E.out3(clamp((t - STOP) / 0.2)));
   if (t >= STOP) wp.arms[1] = { t: lerp(wp.arms[1].t, 2.7, E.outBack(clamp((t - STOP) / 0.2), 2)), k: lerp(wp.arms[1].k, 0.3 + 0.25 * Math.sin((t - STOP) * 14), clamp((t - STOP) / 0.2)) };
   const S = guyStrokes({ x: GEND.x, y: GEY, s: GEND.s }, wp);
-  if (t < B[20] + 0.4) {
-    const u = ioL((t - B[20]) / 0.24);
-    const HP = morphW(xf(bulbDense(), { x: TBULB.x, y: TBULB.y, sx: TBULB.s, sy: TBULB.s }), circlePts(S.C[0], S.C[1], S.R, 120), u, 'bulb-head', 200);
-    const g = clamp((t - B[20] - 0.16) / 0.24);
-    if (g > 0) { const gr = (st) => growStroke(st, E.out2(g)); drawStrokeGuy({ torso: gr(S.torso), legs: S.legs.map(gr), arms: S.arms.map(gr), C: S.C, R: 0 }, D, 1300); }
-    drawMorph(HP, mixHex(PAL.yel, PAL.hi, u), D, 1305, { w: 10 });
+  const sy = sunY(tq), mu = ioL((t - B[20]) / 0.32), gl = E.out2(clamp((t - B[20] - 0.1) / 0.7));
+  const bp = beatPulse(tq, beatsIn(B[20], DUR), 8);
+  // warm morning light + slow god-ray wedges in the sky
+  if (gl > 0) {
+    c.save(); c.globalCompositeOperation = 'multiply'; c.globalAlpha *= gl;
+    const g = c.createRadialGradient(SUN.x, sy, 60, SUN.x, sy, 1250);
+    g.addColorStop(0, '#ffc46e'); g.addColorStop(0.38, '#ffe2b0'); g.addColorStop(1, '#fff9f0');
+    c.fillStyle = g; c.fillRect(-400, -400, W + 800, H + 800);
+    c.restore();
+    c.save(); skyClip(); sunburst(c, SUN.x, sy, 1900, 22, -0.25 + 0.1 * (tq - B[20]), '#ffd99c', D, 1395, gl); c.restore();
+  }
+  c.save(); skyClip();
+  if (mu < 1) drawMorph(morphW(xf(bulbDense(), { x: TBULB.x, y: TBULB.y, sx: TBULB.s, sy: TBULB.s }), circlePts(SUN.x, sy, SUN.R, 120), mu, 'bulb-sun', 200), mixHex(PAL.yel, SUNC, mu), D, 1305, { w: 10 });
+  else {
+    const ru = E.outBack(clamp((t - B[20] - 0.32) / 0.3), 2);
+    for (let i = 0; i < 12; i++) {
+      const a = -0.2 + 0.22 * (tq - B[20]) + (i / 12) * Math.PI * 2;
+      const r0 = SUN.R + 28, r1 = r0 + (60 + 14 * Math.sin(i * 1.9)) * ru * (1 + 0.15 * bp);
+      if (ru > 0.02) inkStroke(c, [[SUN.x + Math.cos(a) * r0, sy + Math.sin(a) * r0], [SUN.x + Math.cos(a) * r1, sy + Math.sin(a) * r1]], { seed: D * 13 + 1390 + i, w: 12, amp: 0.8, t0: 3, t1: 3 });
+    }
+    const P = circlePts(SUN.x, sy, SUN.R * (1 + 0.02 * bp), 90);
+    fillShape(c, P, SUNC, { seed: D * 13 + 1301, amp: 1.3, dx: REG.dx, dy: REG.dy });
+    const hl = []; for (let i = 0; i <= 8; i++) { const a = lerp(3.55, 4.35, i / 8); hl.push([SUN.x + Math.cos(a) * SUN.R * 0.72, sy + Math.sin(a) * SUN.R * 0.72]); }
+    inkStroke(c, hl, { seed: D * 13 + 1303, w: 16, amp: 1, t0: 8, t1: 10, color: '#ffe9b8' });
+    inkLoop(c, P, { seed: D * 13 + 1302, w: 10, amp: 1.4, heavy: 0.3 });
+  }
+  c.restore();
+  // horizon draws out from the middle, then scrolls with the walk
+  const half = 480 * E.out3(clamp((t - B[20] - 0.04) / 0.3));
+  const off = (Math.min(tq, STOP) - B[20]) * STEP(GEND.s) / BEAT;
+  if (half > 1) ground(540 - half, 540 + half, FLOOR, off, D, 1310, { ticks: half > 470 });
+  if (t < B[20] + 0.42) {
+    const g = clamp((t - B[20] - 0.1) / 0.3);
+    if (g > 0) { const gr = (st) => growStroke(st, E.out2(g)); drawStrokeGuy({ torso: gr(S.torso), legs: S.legs.map(gr), arms: S.arms.map(gr), C: S.C, R: S.R }, D, 1320, { headS: E.outBack(clamp(g * 1.4), 2) }); }
   } else {
-    ground(60, 1020, FLOOR, t < STOP ? (tq - B[20]) * STEP(GEND.s) / BEAT : (STOP - B[20]) * STEP(GEND.s) / BEAT, D, 1310);
-    footTrail(t < STOP ? t : STOP, t < STOP ? tq : STOP, B[20] + 0.4, STOP, GEND.x + 60, FLOOR + 50, 0.24, D, 1320, { gs: GEND.s });
+    footTrail(t < STOP ? t : STOP, t < STOP ? tq : STOP, B[20] + 0.42, STOP, GEND.x + 60, FLOOR + 50, 0.24, D, 1325, { gs: GEND.s });
     drawGuy(c, { x: GEND.x, y: GEY, s: GEND.s }, wp, { D, k: 1330, face: t >= STOP ? 'wink' : 'grin' });
-    for (const tb of beatsIn(B[20] + 0.4, STOP)) { // each step counts: "+1" floats up from the stepping foot
+    for (const tb of beatsIn(B[20] + 0.4, STOP)) { // each step counts: "+1" floats up behind him
       const u = (tq - tb) / 0.5; if (u < 0 || u >= 1) continue;
       const i = Math.round((tb - PH) / BEAT);
       c.save(); c.globalAlpha *= 1 - E.in2(u);
-      letters(c, '+1', { font: 'KL', size: 86, x: GEND.x + (i % 2 ? 215 : 185), y: FLOOR - 90 - 120 * E.out2(u), fill: PAL.org, ink: PAL.ink, inkW: 4, shadow: PAL.ink, D, seed: 1380 + i, anim: () => ({ s: E.outBack(clamp(u * 4), 2.4), r: i % 2 ? 0.12 : -0.12 }) });
+      letters(c, '+1', { font: 'KL', size: 86, x: GEND.x - (i % 2 ? 175 : 205), y: FLOOR - 90 - 120 * E.out2(u), fill: PAL.org, ink: PAL.ink, inkW: 4, shadow: PAL.ink, D, seed: 1380 + i, anim: () => ({ s: E.outBack(clamp(u * 4), 2.4), r: i % 2 ? 0.12 : -0.12 }) });
       c.restore();
     }
-    if (t >= STOP) { const k = clamp((tq - STOP) / 0.18); twinkle(c, GEND.x + 200, GEY - 330, 46 * E.outBack(k, 2.5), D, 1340, PAL.yel, tq); twinkle(c, GEND.x - 210, GEY - 250, 30 * E.outBack(clamp(k * 1.3 - 0.3), 2.5), D, 1341, PAL.orgL, 0.4); }
+    if (t >= STOP) { const k = clamp((tq - STOP) / 0.18); twinkle(c, GEND.x + 200, GEY - 330, 46 * E.outBack(k, 2.5), D, 1340, PAL.yel, tq); twinkle(c, GEND.x - 190, GEY - 250, 30 * E.outBack(clamp(k * 1.3 - 0.3), 2.5), D, 1341, PAL.orgL, 0.4); }
   }
   HL('今天，', t, B[20] + 0.06, 99, 390, { D, seed: 1350, size: 116 });
   HL('你大走了吗？', t, bt(81), 99, 540, { D, seed: 1351, size: 132, color: { 1: PAL.org, 2: PAL.org } });
@@ -895,6 +991,82 @@ function sceneEnd(t, tq, D) {
   if (au > 0) drawArrow(c, [[x0 + tot + 20, y - 10], [x0 + tot + 90, y - 40], [985, y - 140]], D, 1370, { draw: au, w: 8, head: 30 });
 }
 
+// ------------------------------------------------------------------ v2 layers: camera, colour backdrops, sunbursts, confetti
+// camera: a slow push through every bar that eases back during the next morph, downbeat kicks, impact punches about the hit point
+const BREATH = [0.07, 0.03, 0.03, 0.025, 0.035, 0.025, 0.025, 0.07, 0.02, 0.025, 0.04, 0.02, 0.03, 0.03, 0.025, 0.04, 0.03, 0.025, 0.025, 0.025];
+let PUNCH = null;
+const punches = () => (PUNCH ||= [[FLAT, 0.05, 540, 1300, -0.012], [B[1], 0.1, 540, 880, 0.014], [SEAL_T, 0.04, 878, 1135, 0], [LAND, 0.13, 600, 1124, 0.022],
+  [LAND + 0.11, 0.03, 540, 610, 0], [B[11], 0.05, 540, 1090, 0.01], [B[11] + 0.13, 0.025, 540, 565, 0], [bt(53), 0.03, 540, 1040, 0], [FLIP1, 0.02, 650, 880, 0], [FLIP2, 0.02, 650, 1170, 0],
+  [B[16], 0.15, 545, 1060, -0.022], [STAMP_R, 0.07, 690, 995, 0.014], [bt(78) + 0.3, 0.035, 540, 930, 0], [STOP, 0.04, 540, 1000, 0]]);
+function camZoom(t) {
+  if (t < B[1]) return 1 + BREATH[0] * E.io2(clamp(t / FLAT));
+  if (t >= B[20]) return 1 + BREATH[19] * (1 - ioL((t - B[20]) / 0.3)) + 0.05 * E.io2(clamp((t - B[20] - 0.3) / (DUR - B[20] - 0.3)));
+  const k = Math.min(19, Math.floor((t - PH) / (4 * BEAT) + 1e-9)), u = t - B[k];
+  const prev = BREATH[k - 1] ?? 0, cur = BREATH[k] ?? 0;
+  return 1 + (u < 0.3 ? prev * (1 - ioL(u / 0.3)) : cur * E.io2(clamp((u - 0.3) / (4 * BEAT - 0.3))));
+}
+function applyCamera(t) {
+  let z = camZoom(t);
+  for (let k = 2; k < 22; k++) if (k !== 8 && k !== 16) { const u = t - B[k]; if (u >= 0 && u < 0.6) z *= 1 + 0.014 * (u < 0.05 ? u / 0.05 : Math.exp(-(u - 0.05) * 10)); }
+  const r = 0.0035 * Math.sin((2 * Math.PI * (t - PH)) / (8 * BEAT));
+  c.translate(540, 960); c.rotate(r); c.scale(z, z); c.translate(-540, -960);
+  for (const [t0, amp, x, y, rr] of punches()) {
+    const u = t - t0; if (u < 0 || u > 0.8) continue;
+    const s = 1 + amp * (u < 0.04 ? u / 0.04 : Math.exp(-(u - 0.04) * 9));
+    c.translate(x, y); c.rotate(rr * Math.exp(-6 * u) * Math.sin(20 * u)); c.scale(s, s); c.translate(-x, -y);
+  }
+}
+// colour backdrops: one riso-tinted blob behind the hero shape, re-shaped on every bar (with a halftone drop shadow)
+const T_ORG = '#ffcf9f', T_YEL = '#ffe38a', T_GB = '#d3dde8', T_GREY = '#d8d4cc', T_TEAL = '#bfe8dc', T_LIME = '#dcefb0', T_RED = '#f9bfb0', T_GRN = '#c0e8cb', T_PINK = '#f9c9d6', T_BLUE = '#c9e3f5';
+let BTRACK = null;
+const backdropTrack = () => (BTRACK ||= blobTrack([
+  { t: B[1], x: 540, y: 1040, rx: 0, ry: 0, color: T_ORG },
+  { t: B[1] + 0.03, d: 0.42, e: 'outBack', rx: 330, ry: 330 },
+  { t: B[2] - 0.06, d: 0.36, x: 520, y: 800, rx: 470, ry: 300, n: 4, rot: -0.03, color: T_YEL },
+  { t: B[3], x: 545, y: 1010, rx: 410, ry: 320, n: 7, rot: 0.02, color: T_GB },
+  { t: B[4], d: 0.6, x: 545, y: 1040, rx: 400, ry: 290, rot: -0.03, wb: 0.05, color: T_GREY },
+  { t: B[5], x: 540, y: 900, rx: 300, ry: 300, n: 2, rot: 0, wb: 0, color: T_TEAL },
+  { t: B[6], x: 540, y: 990, rx: 430, ry: 370, n: 3.2, rot: 0.04, color: T_LIME },
+  { t: B[7], x: 580, y: 1050, rx: 360, ry: 320, n: 2, rot: 0, wb: 0.12, color: T_RED },
+  { t: JUMP - 0.4, d: 0.5, e: 'in2', x: 590, y: 1030, rx: 420, ry: 380, sp: 0.14, wb: 0.08 },
+  { t: LAND, d: 0.14, e: 'out3', x: 600, y: 1124, rx: 440, ry: 440, sp: 0.38, wb: 0, color: T_GRN },
+  { t: B[9], x: 560, y: 1150, rx: 440, ry: 270, sp: 0 },
+  { t: B[10], x: 540, y: 1010, rx: 330, ry: 330, color: T_ORG },
+  { t: B[11], d: 0.2, e: 'out3', x: 540, y: 1090, rx: 320, ry: 320, sp: 0.22, color: T_YEL },
+  { t: B[12], x: 540, y: 990, rx: 370, ry: 330, sp: 0, wb: 0.12, color: T_PINK },
+  { t: B[13], x: 540, y: 1010, rx: 300, ry: 300, wb: 0, color: '#ffeab0' },
+  { t: bt(53), d: 0.16, e: 'out3', x: 540, y: 1000, rx: 370, ry: 370, sp: 0.3, color: T_YEL },
+  { t: B[14], x: 560, y: 1020, rx: 430, ry: 320, n: 4, sp: 0, color: T_GRN },
+  { t: B[15], x: 560, y: 1030, rx: 440, ry: 370, rot: 0.03 },
+  { t: B[16] - 0.13, d: 0.13, e: 'in2', a: 0 },
+  { t: B[17] - 0.01, d: 0, x: 540, y: 1090, rx: 0, ry: 0, a: 1, n: 4, rot: 0, color: T_ORG },
+  { t: B[17] + 0.02, d: 0.4, e: 'outBack', rx: 430, ry: 330 },
+  { t: B[18], x: 540, y: 1060, rx: 320, ry: 320, n: 2, color: T_BLUE },
+  { t: B[19], x: 540, y: 960, rx: 380, ry: 350, wb: 0.16, color: T_GREY },
+  { t: bt(78), d: 0.18, e: 'out3', x: 540, y: 930, rx: 380, ry: 380, wb: 0, sp: 0.3, color: T_YEL },
+  { t: B[20], d: 0.3, e: 'in2', rx: 0, ry: 0 },
+], ioL));
+function backdrop(t, tq, D) {
+  const p = backdropTrack()(tq);
+  if (!p) return;
+  const bp = pulse(tq, bt(Math.floor((tq - PH) / BEAT + 1e-6)), 9);
+  drawBackdrop(c, { ...p, rx: p.rx * (1 + 0.035 * bp), ry: p.ry * (1 + 0.035 * bp), ph: tq * 1.6 }, D, 1450);
+}
+// rotating sunburst wedges behind the two drops
+function bursts(t, tq, D) {
+  for (const [t0, t1, x, y, n, col, k] of [[LAND, LAND + 0.95, 600, 1124, 24, '#ffe08a', 1460], [B[16], B[17] - 0.08, 545, 1060, 28, '#ffd27a', 1470]]) {
+    if (t < t0 || t >= t1) continue;
+    const R = 1800 * E.out3(clamp((t - t0) / 0.24)), a = 1 - E.in2(clamp((t - (t1 - 0.3)) / 0.3));
+    sunburst(c, x, y, R, n, 0.2 + 0.45 * (tq - t0), col, D, k, a);
+  }
+}
+function confettiFX(t, tq) {
+  confetti(c, tq, LAND, 600, 1124, { n: 46, seed: 7, a0: -Math.PI * 0.95, a1: -Math.PI * 0.05, v0: 1100, v1: 2600, drag: 2.2, life: 1.6, size: 1.45 });
+  confetti(c, tq, B[16], 545, 1060, { n: 64, seed: 9, a0: -Math.PI, a1: 0, v0: 1200, v1: 2900, drag: 2.2, life: 1.9, size: 1.5 });
+  confetti(c, tq, STOP, 30, 1780, { n: 34, seed: 11, a0: -Math.PI * 0.44, a1: -Math.PI * 0.24, v0: 2400, v1: 3700, drag: 1.6, life: 1.2, size: 1.6 });
+  confetti(c, tq, STOP, 1050, 1780, { n: 34, seed: 12, a0: -Math.PI * 0.76, a1: -Math.PI * 0.56, v0: 2400, v1: 3700, drag: 1.6, life: 1.2, size: 1.6 });
+}
+
 // ------------------------------------------------------------------ render
 export function render(t) {
   const f = Math.round(t * FPS);
@@ -903,11 +1075,15 @@ export function render(t) {
   c.setTransform(1, 0, 0, 1, 0, 0);
   c.globalAlpha = 1; c.globalCompositeOperation = 'source-over';
   drawPaper();
-  const sh = shakeAt(t, [[FLAT, 10], [B[1], 22], [SEAL_T, 8], [LAND, 26], [B[11], 10], [B[16], 22], [STAMP_R, 14], [STOP, 6]]);
+  const sh = shakeAt(t, [[FLAT, 10], [B[1], 22], [SEAL_T, 8], [LAND, 26], [LAND + 0.11, 12], [B[11], 10], [B[11] + 0.13, 8], [B[16], 22], [STAMP_R, 14], [STOP, 6]]);
   c.save(); c.translate(sh.x, sh.y);
+  applyCamera(t);
+  bursts(t, tq, D);
+  backdrop(t, tq, D);
   sceneSofa(t, tq, D);
   sceneFlat(t, tq, D);
   sceneWalk1(t, tq, D);
+  nightFX(t, tq, D);
   textHook(t, tq, D);
   sceneTitle(t, tq, D);
   sceneDesk(t, tq, D);
@@ -920,9 +1096,13 @@ export function render(t) {
   sceneClimax(t, tq, D);
   sceneTips(t, tq, D);
   sceneEnd(t, tq, D);
+  confettiFX(t, tq);
   c.restore();
+  vignette(c, W, H, 0.16);
   drawTag(t, D);
   drawTooth(D);
-  // impact flashes (1 frame)
-  for (const ti of [B[1], LAND, B[16]]) if (f === Math.round(ti * FPS)) { c.save(); c.globalAlpha = 0.5; c.fillStyle = PAL.hi; c.fillRect(0, 0, W, H); c.restore(); }
+  // impact frames: the light flash at B1, 2 inverted frames on each drop
+  if (f === Math.ceil(B[1] * FPS)) { c.save(); c.globalAlpha = 0.5; c.fillStyle = PAL.hi; c.fillRect(0, 0, W, H); c.restore(); }
+  const fL = Math.round(LAND * FPS), f16 = Math.round(B[16] * FPS);
+  if (f === fL || f === fL + 1 || f === f16 || f === f16 + 1) invertFrame(c, W, H);
 }
