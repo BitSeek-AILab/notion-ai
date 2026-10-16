@@ -47,11 +47,33 @@ export function tip(c, p, r = 15, color = PAL.cream, a = 1) {
   c.fillStyle = g; c.beginPath(); c.arc(p[0], p[1], r, 0, Math.PI * 2); c.fill();
   c.restore();
 }
+// Liang–Barsky clip of a screen segment against a generous viewport (lines toward a far-away crossing stay cheap)
+const CLIP = [-400, -400, 1480, 2320];
+function clipSeg(a, b) {
+  let t0 = 0, t1 = 1;
+  const dx = b[0] - a[0], dy = b[1] - a[1];
+  const p = [-dx, dx, -dy, dy], q = [a[0] - CLIP[0], CLIP[2] - a[0], a[1] - CLIP[1], CLIP[3] - a[1]];
+  for (let i = 0; i < 4; i++) {
+    if (p[i] === 0) { if (q[i] < 0) return null; continue; }
+    const r = q[i] / p[i];
+    if (p[i] < 0) { if (r > t1) return null; if (r > t0) t0 = r; } else { if (r < t0) return null; if (r < t1) t1 = r; }
+  }
+  return [t0, t1];
+}
 // straight line between SCREEN points a→b, drawn over [from, to] fraction. o: {w, color, alpha, halo, dash, tip}
 export function sline(c, a, b, o = {}) {
   const f0 = clamp(o.from ?? 0), f1 = clamp(o.to ?? 1);
   if (f1 <= f0 || (o.alpha ?? 1) <= 0.003) return;
-  const A = [lerp(a[0], b[0], f0), lerp(a[1], b[1], f0)], B = [lerp(a[0], b[0], f1), lerp(a[1], b[1], f1)];
+  let A = [lerp(a[0], b[0], f0), lerp(a[1], b[1], f0)], B = [lerp(a[0], b[0], f1), lerp(a[1], b[1], f1)];
+  if (![A[0], A[1], B[0], B[1]].every(Number.isFinite)) return;
+  const cl = clipSeg(A, B);
+  if (!cl) return;
+  if (cl[0] > 0 || cl[1] < 1) {
+    const L = Math.hypot(B[0] - A[0], B[1] - A[1]);
+    if (o.dash) o = { ...o, dashOff: (o.dashOff || 0) + cl[0] * L };
+    const A2 = [lerp(A[0], B[0], cl[0]), lerp(A[1], B[1], cl[0])], B2 = [lerp(A[0], B[0], cl[1]), lerp(A[1], B[1], cl[1])];
+    A = A2; B = B2;
+  }
   const pts = segPts(A, B);
   c.save();
   c.globalAlpha *= o.alpha ?? 1;

@@ -6,6 +6,7 @@ import * as G from './geo.js';
 import * as S from './scene.js';
 import { BOIL, bp, rgba, mixHex, tip, sline, wline, spoly, sdot, sfill, ringWave, rays, sparkle, sparks } from './draw.js';
 import { loadGlyphs, letters, measure, popIn, slamIn, dropOut } from './text.js';
+import { drawLit3D, drawPool } from './lit3d.js';
 
 export const W = S.W, H = S.H, FPS = S.FPS, DUR = S.DUR;
 const bt = S.bt;
@@ -83,18 +84,20 @@ function drawBG(x, st, sh) {
 const S3 = (p) => [p[0], p[1], p[2] || 0];
 function circlePts(st) {
   const C = st.C, con = st.con, P = st.P, out = [];
-  if (con.e < 1e-4) { for (let i = 0; i <= 200; i++) { const a = (i / 200) * Math.PI * 2 + 200 * S.D2R; out.push(P([C.x + C.r * Math.cos(a), C.y + C.r * Math.sin(a), 0])); } return [out]; }
-  // conic: near branch only, cut where it runs far away
-  const F = [C.x, C.y], ax = con.ax * S.D2R, polys = []; let cur = [];
-  for (let i = 0; i <= 480; i++) {
-    const ph = -Math.PI + (Math.PI * 2 * i) / 480, den = 1 + con.e * Math.cos(ph);
-    const r = den > 1e-3 ? con.p / den : Infinity;
-    if (r > 2600) { if (cur.length > 1) polys.push(cur); cur = []; continue; }
-    cur.push(P([F[0] + r * Math.cos(ax + ph), F[1] + r * Math.sin(ax + ph), 0]));
+  if (con.e < 1e-4) { for (let i = 0; i <= 200; i++) { const a = (i / 200) * Math.PI * 2 + 200 * S.D2R; out.push(P([C.x + C.r * Math.cos(a), C.y + C.r * Math.sin(a), 0])); } out.far = false; return [out]; }
+  // conic r = p/(1+e cos φ) about the focus (circle centre); r < 0 traces the far branch of a hyperbola
+  const F = [C.x, C.y], ax = con.ax * S.D2R, polys = [];
+  for (const far of con.e > 1 ? [false, true] : [false]) {
+    let cur = [];
+    for (let i = 0; i <= 720; i++) {
+      const ph = (far ? 0 : -Math.PI) + (Math.PI * 2 * i) / 720, den = 1 + con.e * Math.cos(ph);
+      const ok = far ? den < -1e-3 : den > 1e-3;
+      const r = ok ? con.p / den : Infinity;
+      if (!ok || Math.abs(r) > 2600) { if (cur.length > 1) { cur.far = far; polys.push(cur); } cur = []; continue; }
+      cur.push(P([F[0] + r * Math.cos(ax + ph), F[1] + r * Math.sin(ax + ph), 0]));
+    }
+    if (cur.length > 1) { cur.far = far; polys.push(cur); }
   }
-  if (cur.length > 1) polys.push(cur);
-  // join the wrap-around piece (ellipse / circle are closed)
-  if (con.e < 1 && polys.length === 1) return [polys[0]];
   return polys;
 }
 // extend a world segment by px (screen-ish: world units at scale ~1)
@@ -108,6 +111,11 @@ function drawFigure(f, st, t, n) {
   const u = st.u, v = st.v, lam = st.lam, sc = st.cam.s;
   const is3D = st.cam.pitch > 0.5 || lam > 1e-3;
   const Ps = (p) => P(S3(p));
+  // ---------- overhead lamp: a soft light pool on the floor for the whole 3-D act
+  const w3v = S.w3(n);
+  if (w3v > 0.003) drawPool(f, st, w3v * (0.7 + 0.5 * ramp(44, 44.5, n)));
+  // ---------- the lit 3-D act (floating / lifted figure, hyperboloid, shadows) has its own renderer
+  if (st.h0 > 0.5 || lam > 1e-3) { drawLit3D(f, st, t, n, LY); return; }
   // ---------- schedules
   const circDraw = E.io2(clamp((t - 0.06) / 0.5));
   const aCirc = 1 - 0.35 * ramp(30, 32, n) * (1 - ramp(48, 49, n));
@@ -119,7 +127,7 @@ function drawFigure(f, st, t, n) {
   const lateTan = ramp(56, 57, n);                                     // tangential overlay in the recap
   const aIns = n < 12.5 ? 1 : n < 52.5 ? twinA : 1;
   const aExt = n < 12.5 ? 1 - ramp(12.4, 13.0, n) : n < 52.5 ? 0.3 * twinA : 0.55 * ramp(54.6, 55.2, n);
-  const aPasc = n < 14 ? 1 : n < 52.5 ? twinA : 1;                     // Pascal line + crossings (outside the v-morph)
+  const aPasc = n < 15 ? 1 : n < 52.5 ? twinA : 1;                     // Pascal line + crossings (inside the v-morph they are always on)
   const sliceU = clamp((n - 3.8) / 0.2);
   const ice = PAL.ice;
   // ---------- circle / conic
@@ -127,20 +135,21 @@ function drawFigure(f, st, t, n) {
   const cw = 3.2;
   if (n < 0.62 / S.BEAT && cps.length === 1) {
     spoly(f, cps[0], { w: cw, color: PAL.gold, to: circDraw, tip: true, tipR: 22, alpha: 1 });
-  } else for (const pl of cps) spoly(f, pl, { w: cw, color: PAL.gold, closed: st.con.e < 1e-4, alpha: aCirc });
+  } else for (const pl of cps) spoly(f, pl, { w: pl.far ? 2.6 : cw, color: PAL.gold, closed: st.con.e < 1e-4, alpha: aCirc * (pl.far ? 0.75 : 1) });
   // ---------- 3-D: hyperboloid rulings (behind everything else)
   if (lam > 1e-3) drawHyperboloid(f, st, n);
   // ---------- inscribed hexagon world (A, extensions, crossings, Pascal line)
   const As = A.map(Ps);
   const morphing = u > 1e-4 && u < 1 - 1e-4;
-  if (!morphing && u < 0.5 && aIns > 0.003) {
+  const twinOnly = u >= 0.5 && twinA > 0.003;                         // bar 6: the inscribed twin over the tangential figure
+  if (!morphing && (u < 0.5 || twinOnly) && aIns > 0.003) {
     // sides (one-stroke draw-on in bar 0)
     for (let i = 0; i < 6; i++) {
       const fr = n < 2.05 ? clamp(hexDraw * 6 - i) : 1;
       if (fr <= 0) continue;
       const k = i % 3;
       const col = n < 12 ? mixHex(PAL.gold, PAIR[k], 0.85 * clamp((n - (2 + 0.5 * k)) / 0.25)) : mixHex(PAL.gold, PAIR[k], 0.85);
-      sline(f, As[i], As[(i + 1) % 6], { w: 3.2, color: col, to: fr, tip: n < 2.05, alpha: aIns });
+      sline(f, As[i], As[(i + 1) % 6], { w: twinOnly ? 2.4 : 3.2, color: col, to: fr, tip: n < 2.05, alpha: aIns * (twinOnly ? 0.7 : 1) });
     }
   }
   if (u < 1 - 1e-4 || twinA > 0) {
@@ -158,7 +167,7 @@ function drawFigure(f, st, t, n) {
     }
   }
   // points on the conic
-  if (!morphing && aIns > 0.003 && u < 0.5) for (let i = 0; i < 6; i++) {
+  if (!morphing && aIns > 0.003 && (u < 0.5 || twinOnly)) for (let i = 0; i < 6; i++) {
     const pu = n < 2 ? popA(i) : 1;
     if (pu <= 0) continue;
     sdot(f, As[i], { r: 8.5, s: E.outBack(pu, 2.4), color: PAL.gold, alpha: aIns });
@@ -247,7 +256,7 @@ function drawDualPieces(f, st, t, n, o) {
   const inV = v > 1e-4 && v < 1 - 1e-4;
   const lifted = lam > 1e-3;
   // ---- the Pascal line (red) and its three crossings
-  if (ok && (v < 1 - 1e-4)) {
+  if (ok && (v < 1 - 1e-4 || (o.twinA > 0.003 && n < 52.5))) {
     const span = pascalSpan(X, 80 / sc);
     let a = span[0], b = span[1];
     if (inV) { const ev = E.io2(v); a = G.lerp2(a, Bp, ev); b = G.lerp2(b, Bp, ev); }
@@ -440,10 +449,11 @@ add({ n0: 6.1, n1: 7.95, s: '1639年 · 帕斯卡才16岁', font: 'SM', size: 52
 add({ n0: 5.35, n1: 7.9, s: '随便拖 · 永远共线', font: 'WK', size: 62, y: CY, ent: 'pop' });
 // bar 2 — conics
 add({ n0: 8.0, n1: 10.95, s: '换成别的[圆锥曲线]？', size: 92, y: TY, ent: 'pop' });
-add({ n0: 8.55, n1: 9.5, s: '[椭圆]', font: 'WK', size: 76, y: CY - 16, ent: 'pop', hl: PAL.gold });
-add({ n0: 9.55, n1: 10.5, s: '[抛物线]', font: 'WK', size: 76, y: CY - 16, ent: 'pop', hl: PAL.gold });
-add({ n0: 10.55, n1: 11.95, s: '[双曲线]', font: 'WK', size: 76, y: CY - 16, ent: 'pop', hl: PAL.gold });
+add({ n0: 8.4, n1: 9.4, s: '[椭圆]', font: 'WK', size: 76, y: CY - 16, ent: 'pop', hl: PAL.gold });
+add({ n0: S.TL.s2b, n1: S.TL.h2 - 0.08, s: '[抛物线]', font: 'WK', size: 76, y: CY - 16, ent: 'pop', hl: PAL.gold });
+add({ n0: S.TL.h2 + 0.3, n1: S.TL.h3, s: '[双曲线]', font: 'WK', size: 76, y: CY - 16, ent: 'pop', hl: PAL.gold });
 add({ n0: 11.0, n1: 11.95, s: '照样 · [共线]！', size: 112, y: TY, ent: 'slam', hl: PAL.red });
+add({ n0: 8.5, n1: 11.95, s: '都是圆的“影子” · 直线的影子还是直线', font: 'SM', size: 48, y: TY2 + 8, ent: 'pop', fill: PAL.gold });
 // bar 3 — duality
 add({ n0: 12.0, n1: 15.95, s: '把[点]和[线]互换', size: 104, y: TY, ent: 'pop', hl: PAL.ice });
 add({ n0: 12.6, n1: 13.95, s: '顶点 → 切线　边 → 顶点', font: 'WK', size: 58, y: CY, ent: 'pop' });
@@ -462,6 +472,7 @@ add({ n0: 25.6, n1: 27.9, s: '（行话：极线 ⇄ 极点）', font: 'WK', siz
 // bar 7 — why? go 3-D
 add({ n0: 28.0, n1: 29.95, s: '可是 · [凭什么]？', size: 108, y: TY, ent: 'pop', hl: PAL.red });
 add({ n0: 30.0, n1: 31.95, s: '升到[三维]！', size: 128, y: TY, ent: 'slam', hl: PAL.gold });
+add({ n0: 30.4, n1: 31.95, s: '平面里难证 · 到空间里一眼看穿', font: 'SM', size: 52, y: TY2 + 30, ent: 'pop', fill: PAL.cream });
 // bar 8 — lift
 add({ n0: 32.0, n1: 33.95, s: '六条边 · 一上一下翘起来', font: 'SM', size: 66, y: TY, ent: 'pop' });
 add({ n0: 32.4, n1: 35.95, s: '相邻两边照样相交（切线长相等）', font: 'WK', size: 50, y: CY, ent: 'pop' });
@@ -474,7 +485,7 @@ add({ n0: 37.5, n1: 39.95, s: '每两条 · 都在同一个平面里', font: 'WK
 add({ n0: 40.0, n1: 43.95, s: '两两相交 · 又不共面', font: 'SM', size: 70, y: TY - 50, ent: 'pop' });
 add({ n0: 41.85, n1: 43.95, s: '⇒ 只能交于[同一点]', size: 92, y: TY + 66, ent: 'slam', hl: PAL.red });
 // bar 11 — set up the slam
-add({ n0: 44.0, n1: 47.9, s: '从正上方 · [拍扁]——', size: 100, y: TY, ent: 'pop', hl: PAL.red });
+add({ n0: 44.0, n1: 47.9, s: '从正上方打光 · 看[影子]', size: 96, y: TY, ent: 'pop', hl: PAL.gold });
 add({ n0: 45.0, n1: 47.9, s: '空间里交于一点 → 影子也交于一点', font: 'WK', size: 50, y: CY, ent: 'pop' });
 // bar 12 — HERO
 add({ n0: 48.0, n1: 51.95, s: '[降维打击]！', size: 150, y: TY + 10, ent: 'slam', hl: PAL.red, big: 3.2 });
@@ -534,8 +545,8 @@ function drawTexts(f, t, n) {
     });
   }
   // eccentricity read-out during the conic morph
-  if (n > 8.3 && n < 12.2) {
-    const e = S.conicAt(n).e, a = ramp(8.3, 8.6, n) * (1 - ramp(11.9, 12.2, n));
+  if (n > 8.3 && n < S.TL.h3 + 0.4) {
+    const e = S.conicAt(n).e, a = ramp(8.3, 8.6, n) * (1 - ramp(S.TL.h3, S.TL.h3 + 0.3, n));
     letters(f, 'e = ' + e.toFixed(2), { font: 'SM', size: 44, x: 540, y: CY + 78, fill: PAL.goldD, alpha: a, amp: 0.3 });
   }
 }

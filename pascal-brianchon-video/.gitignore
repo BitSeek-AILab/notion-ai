@@ -1,0 +1,9 @@
+out/
+audio/
+fonts/
+assets/glyphs.json
+node_modules/
+__pycache__/
+*.mp4
+*.wav
+*.mkv
