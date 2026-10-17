@@ -1,6 +1,11 @@
-// 帕斯卡 ↔ 布列安桑 · 几何定理系列 01 — 48 s vertical film, every frame computed from exact projective geometry.
+// 帕斯卡 ↔ 布列安桑 · 几何定理系列 01 — 59.6 s vertical film (v2), every frame computed from exact projective geometry.
 // Look: 02-line-art (midnight #0B1320, champagne-gold line, glowing pen tip, draw-on, dolly-out) × 05-cel-boil
 // (line boil re-rolled every 2 frames, grain, cel impact FX) × 08-morph (the shape itself tells the story).
+// Story in beats n (1 beat = 0.737 s, bar = 4 beats):
+//   0–20  Pascal, shown one step at a time: 6 points → hexagon → 3 pairs of opposite sides → extend → 3 crossings → 共线!
+//  20–40  point → tangent line (one by one) → circumscribed hexagon; crossing → diagonal (one by one) → 共点! Brianchon
+//  40–48  twins + duality dictionary · 可是凭什么？   48–68  3-D proof in 5 numbered steps   68  降维打击
+//  72–76  dual back → Pascal for free                 76–80  end card
 import { PAL, PAIR, clamp, lerp, inv, E, K, hs, Layers } from './engine.js';
 import * as G from './geo.js';
 import * as S from './scene.js';
@@ -45,7 +50,7 @@ export async function init(canvas, dprIn = 1) {
 }
 
 // ------------------------------------------------------------------ camera shake (impacts)
-const HITS = [[4, 7, 0.10], [16, 6, 0.12], [48, 22, 0.16], [55, 7, 0.1], [64, 6, 0.1]];
+const HITS = [[12, 7, 0.10], [32, 6, 0.12], [68, 22, 0.16], [74.5, 7, 0.1]];
 function shakeAt(t) {
   let x = 0, y = 0;
   for (const [n0, A, tau] of HITS) {
@@ -80,285 +85,248 @@ function drawBG(x, st, sh) {
   x.restore();
 }
 
-// ------------------------------------------------------------------ figure helpers
-const S3 = (p) => [p[0], p[1], p[2] || 0];
-function circlePts(st) {
-  const C = st.C, con = st.con, P = st.P, out = [];
-  if (con.e < 1e-4) { for (let i = 0; i <= 200; i++) { const a = (i / 200) * Math.PI * 2 + 200 * S.D2R; out.push(P([C.x + C.r * Math.cos(a), C.y + C.r * Math.sin(a), 0])); } out.far = false; return [out]; }
-  // conic r = p/(1+e cos φ) about the focus (circle centre); r < 0 traces the far branch of a hyperbola
-  const F = [C.x, C.y], ax = con.ax * S.D2R, polys = [];
-  for (const far of con.e > 1 ? [false, true] : [false]) {
-    let cur = [];
-    for (let i = 0; i <= 720; i++) {
-      const ph = (far ? 0 : -Math.PI) + (Math.PI * 2 * i) / 720, den = 1 + con.e * Math.cos(ph);
-      const ok = far ? den < -1e-3 : den > 1e-3;
-      const r = ok ? con.p / den : Infinity;
-      if (!ok || Math.abs(r) > 2600) { if (cur.length > 1) { cur.far = far; polys.push(cur); } cur = []; continue; }
-      cur.push(P([F[0] + r * Math.cos(ax + ph), F[1] + r * Math.sin(ax + ph), 0]));
-    }
-    if (cur.length > 1) { cur.far = far; polys.push(cur); }
-  }
-  return polys;
-}
-// extend a world segment by px (screen-ish: world units at scale ~1)
-const extW = (a, b, e0, e1) => G.extend(a, b, e0, e1);
-// visible span of the Pascal line through the three crossings
-function pascalSpan(X, m) { return G.spanOf(X, m); }
-
 // ------------------------------------------------------------------ the figure
+const S3 = (p) => [p[0], p[1], p[2] || 0];
+// choreography (beats)
+const SCH = {
+  pt: (i) => 0.6 + 0.4 * i,            // the six points pop (with their numbers)
+  side0: 4.2, side1: 5.6,              // hexagon drawn in one stroke 1→2→…→6→1
+  pair: (k) => 6.2 + 0.6 * k,          // opposite-side pair k lights up in its colour
+  ext: (k) => 8.4 + k,                 // pair k is extended (0.6 beat) → its crossing pops at 9 + k
+  slice: 11.8, slam1: 12,              // red line slices through the three crossings
+  tan: (i) => 20.6 + 0.5 * i,          // point i grows into its tangent line (0.45 beat)
+  ret0: 24.2, ret1: 25.2,              // tangent overshoot retracts → circumscribed hexagon
+  wpop: (i) => 24.5 + 0.3 * i,         // its six vertices pop one by one, numbered
+  trace0: 26.3, trace1: 27.2,          // then its six sides are traced in one stroke
+  fly: (k) => 28.3 + k,                // crossing k flies into diagonal k (S.flightK)
+  shrink0: 31.4, slam2: 32,            // red line shrinks into the red point
+};
+function circlePts(st) {
+  const C = st.C, P = st.P, out = [];
+  for (let i = 0; i <= 200; i++) { const a = (i / 200) * Math.PI * 2 + 200 * S.D2R; out.push(P([C.x + C.r * Math.cos(a), C.y + C.r * Math.sin(a), 0])); }
+  return out;
+}
 function drawFigure(f, st, t, n) {
-  const P = st.P, A = st.A, C = st.C, pas = st.pas, bri = st.bri, L = st.lift;
-  const u = st.u, v = st.v, lam = st.lam, sc = st.cam.s;
-  const is3D = st.cam.pitch > 0.5 || lam > 1e-3;
-  const Ps = (p) => P(S3(p));
   // ---------- overhead lamp: a soft light pool on the floor for the whole 3-D act
   const w3v = S.w3(n);
-  if (w3v > 0.003) drawPool(f, st, w3v * (0.7 + 0.5 * ramp(44, 44.5, n)));
+  if (w3v > 0.003) drawPool(f, st, w3v * (0.7 + 0.5 * ramp(64, 64.5, n)));
   // ---------- the lit 3-D act (floating / lifted figure, hyperboloid, shadows) has its own renderer
-  if (st.h0 > 0.5 || lam > 1e-3) { drawLit3D(f, st, t, n, LY); return; }
-  // ---------- schedules
-  const circDraw = E.io2(clamp((t - 0.06) / 0.5));
-  const aCirc = 1 - 0.35 * ramp(30, 32, n) * (1 - ramp(48, 49, n));
-  const popA = (i) => clamp((n - 0.25 * i) / 0.32);
-  const hexDraw = clamp((n - 1.25) / 0.75);
-  const extDraw = (k) => E.out2(clamp((n - (2 + 0.5 * k)) / 0.42));
-  const xPop = (k) => clamp((n - (2.4 + 0.5 * k)) / 0.3);
-  const twinA = ramp(24, 25, n) * (1 - ramp(28.4, 29.4, n));      // inscribed world overlay in bar 6
-  const lateTan = ramp(56, 57, n);                                     // tangential overlay in the recap
-  const aIns = n < 12.5 ? 1 : n < 52.5 ? twinA : 1;
-  const aExt = n < 12.5 ? 1 - ramp(12.4, 13.0, n) : n < 52.5 ? 0.3 * twinA : 0.55 * ramp(54.6, 55.2, n);
-  const aPasc = n < 15 ? 1 : n < 52.5 ? twinA : 1;                     // Pascal line + crossings (inside the v-morph they are always on)
-  const sliceU = clamp((n - 3.8) / 0.2);
-  const ice = PAL.ice;
-  // ---------- circle / conic
+  if (st.h0 > 0.5 || st.lam > 1e-3) { drawLit3D(f, st, t, n, LY); return; }
   const cps = circlePts(st);
-  const cw = 3.2;
-  if (n < 0.62 / S.BEAT && cps.length === 1) {
-    spoly(f, cps[0], { w: cw, color: PAL.gold, to: circDraw, tip: true, tipR: 22, alpha: 1 });
-  } else for (const pl of cps) spoly(f, pl, { w: pl.far ? 2.6 : cw, color: PAL.gold, closed: st.con.e < 1e-4, alpha: aCirc * (pl.far ? 0.75 : 1) });
-  // ---------- 3-D: hyperboloid rulings (behind everything else)
-  if (lam > 1e-3) drawHyperboloid(f, st, n);
-  // ---------- inscribed hexagon world (A, extensions, crossings, Pascal line)
+  const cA = 1 - 0.5 * ramp(24.3, 24.9, n) * (1 - ramp(27.4, 28.0, n));   // the circle steps back while the new hexagon is shown
+  if (t < 0.6) spoly(f, cps, { w: 3.2, color: PAL.gold, to: E.io2(clamp((t - 0.06) / 0.5)), tip: true, tipR: 22, alpha: 1 });
+  else spoly(f, cps, { w: 3.2, color: PAL.gold, closed: true, alpha: cA });
+  if (n < 72.4) drawForward(f, st, t, n); else drawBack(f, st, t, n);
+}
+
+// beats 0–72.4: the Pascal figure is built step by step, then turned into its dual piece by piece
+function drawForward(f, st, t, n) {
+  const P = st.P, A = st.A, pas = st.pas, bri = st.bri, sc = st.cam.s;
+  const Ps = (p) => P(S3(p));
+  const X = pas.X, ok = X.every(Boolean), Wv = bri.W, Bp = bri.B, ice = PAL.ice;
+  const pre = n < 40;                                                   // the construction (before the twins)
+  const twinA = pre ? 0 : ramp(40, 41, n) * (1 - ramp(44, 45, n));       // inscribed twin over the dual figure
+  const dimIns = n < 20.2 ? 1 : 1 - 0.72 * ramp(20.2, 21.2, n);         // the Pascal figure steps back while the dual grows
+  const gone = (k) => 1 - ramp(SCH.fly(k), SCH.fly(k) + 0.6, n);         // pair k leaves together with its crossing
   const As = A.map(Ps);
-  const morphing = u > 1e-4 && u < 1 - 1e-4;
-  const twinOnly = u >= 0.5 && twinA > 0.003;                         // bar 6: the inscribed twin over the tangential figure
-  if (!morphing && (u < 0.5 || twinOnly) && aIns > 0.003) {
-    // sides (one-stroke draw-on in bar 0)
-    for (let i = 0; i < 6; i++) {
-      const fr = n < 2.05 ? clamp(hexDraw * 6 - i) : 1;
+  // ---- circumscribed hexagon: a brief glass fill when it closes
+  const fillA = 0.13 * pulse(n, 27.0, 0.3, 1.5);
+  if (fillA > 0.003) sfill(f, Wv.map(Ps), ice, fillA);
+  // ---- inscribed hexagon: one-stroke draw-on, then the three pairs of opposite sides light up
+  for (let i = 0; i < 6; i++) {
+    const k = i % 3;
+    let a, w = 3.2, fr = 1, col, halo;
+    if (pre) {
+      a = dimIns * gone(k);
+      fr = clamp(((n - SCH.side0) / (SCH.side1 - SCH.side0)) * 6 - i);
+      col = mixHex(PAL.gold, PAIR[k], 0.85 * clamp((n - SCH.pair(k)) / 0.25));
+      const pp = pulse(n, SCH.pair(k), 0.08, 0.9);
+      w += 3.4 * pp; if (pp > 0.01) halo = 2 + 2.5 * pp;
+    } else { a = 0.7 * twinA; w = 2.4; col = mixHex(PAL.gold, PAIR[k], 0.85); }
+    if (a <= 0.003 || fr <= 0) continue;
+    sline(f, As[i], As[(i + 1) % 6], { w, color: col, to: fr, tip: fr < 1, tipR: 20, alpha: a, halo });
+  }
+  // ---- extensions of each pair to its crossing
+  if (ok) for (let k = 0; k < 3; k++) {
+    const dr = E.out2(clamp((n - SCH.ext(k)) / 0.6));
+    const a = pre ? 0.9 * dimIns * gone(k) : 0.3 * twinA;
+    if (dr <= 0 || a <= 0.003) continue;
+    for (const side of [k, k + 3]) {
+      const p = A[side], q = A[(side + 1) % 6], Xk = X[k];
+      const near = G.dist(p, Xk) < G.dist(q, Xk) ? p : q;
+      const over = G.add(Xk, G.mul(G.nrm(G.sub(Xk, near)), 46 / sc));
+      sline(f, Ps(near), Ps(over), { w: 2.2, color: PAIR[k], to: dr, tip: dr < 1, alpha: a });
+    }
+  }
+  // ---- point → tangent line (grows out of the point, overshoots, then trims to the circumscribed hexagon)
+  const ov = 0.45 * (1 - ramp(SCH.ret0, SCH.ret1, n));
+  for (let i = 0; i < 6; i++) {
+    const g = E.out2(clamp((n - SCH.tan(i)) / 0.45));
+    if (g <= 0) continue;
+    const a0 = A[i], e0 = G.add(a0, G.mul(G.sub(Wv[(i + 5) % 6], a0), g * (1 + ov))), e1 = G.add(a0, G.mul(G.sub(Wv[i], a0), g * (1 + ov)));
+    const q0 = Ps(e0), q1 = Ps(e1);
+    sline(f, q0, q1, { w: 3.2, color: ice, alpha: 1 });
+    if (g < 1) { tip(f, q0, 18, ice, 1); tip(f, q1, 18, ice, 1); }
+  }
+  // ---- one-stroke tracer around the circumscribed hexagon: six sides, six corners
+  if (pre && n > SCH.trace0 && n < SCH.trace1 + 0.8) {
+    const pr = ((n - SCH.trace0) / (SCH.trace1 - SCH.trace0)) * 6, fa = 1 - ramp(SCH.trace1 + 0.1, SCH.trace1 + 0.7, n);
+    for (let e = 0; e < 6; e++) {
+      const fr = clamp(pr - e);
       if (fr <= 0) continue;
-      const k = i % 3;
-      const col = n < 12 ? mixHex(PAL.gold, PAIR[k], 0.85 * clamp((n - (2 + 0.5 * k)) / 0.25)) : mixHex(PAL.gold, PAIR[k], 0.85);
-      sline(f, As[i], As[(i + 1) % 6], { w: twinOnly ? 2.4 : 3.2, color: col, to: fr, tip: n < 2.05, alpha: aIns * (twinOnly ? 0.7 : 1) });
+      sline(f, Ps(Wv[e]), Ps(Wv[(e + 1) % 6]), { w: 6, color: '#E6FBFF', to: fr, tip: fr < 1, tipR: 26, halo: 3, alpha: 0.85 * fa });
     }
   }
-  if (u < 1 - 1e-4 || twinA > 0) {
-    // extensions of the opposite sides to their crossing
-    if (aExt > 0.003 && pas.X.every(Boolean)) for (let k = 0; k < 3; k++) {
-      const dr = n < 12 ? extDraw(k) : 1;
-      if (dr <= 0) continue;
-      for (const side of [k, k + 3]) {
-        const a = A[side], b = A[(side + 1) % 6], X = pas.X[k];
-        // grow from the nearer endpoint toward X (plus a little overshoot)
-        const near = G.dist(a, X) < G.dist(b, X) ? a : b;
-        const over = G.add(X, G.mul(G.nrm(G.sub(X, near)), 46 / sc));
-        sline(f, Ps(near), Ps(over), { w: 2.2, color: PAIR[k], to: dr, tip: dr < 1, alpha: aExt * 0.9 });
-      }
+  // ---- diagonals: each grows out of its flying crossing
+  for (let k = 0; k < 3; k++) {
+    const ev = pre ? S.flightK(n, k) : 1;
+    if (ev <= 0) continue;
+    const W0 = Wv[k], W1 = Wv[k + 3], M = G.lerp2(W0, W1, 0.5);
+    if (ev < 1) {
+      const cen = G.lerp2(X[k] || M, M, ev), d = G.nrm(G.sub(W1, W0)), hl = ev * (G.dist(W0, W1) / 2 + 24 / sc);
+      sline(f, Ps(G.sub(cen, G.mul(d, hl))), Ps(G.add(cen, G.mul(d, hl))), { w: 3, color: PAIR[k], alpha: 1 });
+    } else {
+      const [a, b] = G.extend(W0, W1, 24 / sc, 24 / sc);
+      const hi = pulse(n, 32, 0.05, 1.5) + pulse(n, 68, 0.04, 1.8);
+      sline(f, Ps(a), Ps(b), { w: 3 + 2 * hi, color: PAIR[k], halo: 2 + 2 * hi, alpha: 1 });
     }
   }
-  // points on the conic
-  if (!morphing && aIns > 0.003 && (u < 0.5 || twinOnly)) for (let i = 0; i < 6; i++) {
-    const pu = n < 2 ? popA(i) : 1;
+  // ---- the red Pascal line (slices in at 11.8–12; shrinks into the red point at 31.4–32; twin overlay later)
+  if (ok && n >= SCH.slice && (n < SCH.slam2 || twinA > 0.003)) {
+    const span = G.spanOf(X, 80 / sc);
+    let a = span[0], b = span[1], aL = twinA;
+    if (pre) {
+      const sh = E.io2(inv(SCH.shrink0, SCH.slam2, n));
+      a = G.lerp2(a, Bp, sh); b = G.lerp2(b, Bp, sh);
+      aL = 1 - 0.4 * ramp(20.2, 21.2, n) * (1 - ramp(31.0, 31.4, n));
+    }
+    if (n < SCH.slam1) sline(f, Ps(a), Ps(b), { w: 4.4, color: PAL.red, to: E.in2(clamp((n - SCH.slice) / 0.2)), tip: true, tipR: 30, halo: 4, alpha: 1 });
+    else {
+      const fl = pulse(n, SCH.slam1, 0.05, 1.2);
+      sline(f, Ps(a), Ps(b), { w: 4.4 + 3 * fl, color: mixHex(PAL.red, '#FFD0D8', fl * 0.6), halo: 4.5, alpha: aL });
+    }
+  }
+  // ---- points on the circle: gold vertices of the inscribed hexagon → small tangent points
+  for (let i = 0; i < 6; i++) {
+    const pu = clamp((n - SCH.pt(i)) / 0.32);
     if (pu <= 0) continue;
-    sdot(f, As[i], { r: 8.5, s: E.outBack(pu, 2.4), color: PAL.gold, alpha: aIns });
+    const tg = clamp((n - SCH.tan(i)) / 0.35);
+    const ga = pre ? 1 - tg : twinA;
+    if (ga > 0.003) sdot(f, As[i], { r: 8.5, s: E.outBack(pu, 2.4), color: PAL.gold, alpha: ga });
+    if (tg > 0) sdot(f, As[i], { r: 4.6, color: ice, core: '#0B1320', alpha: 0.75 * tg * (1 - 0.6 * twinA) });
   }
-  // ---------- 12-gon morph: inscribed → tangential (u)
-  if (morphing) {
-    const Wp = bri.W;
+  // ---- circumscribed hexagon vertices
+  for (let i = 0; i < 6; i++) {
+    const wp = clamp((n - SCH.wpop(i)) / 0.3);
+    if (wp <= 0) continue;
+    // the tracer passes corner i+1 at trace0 + (i+1)/6 of the stroke: a small bump
+    const tb = pre ? pulse(n, SCH.trace0 + ((i + 1) % 6 || 6) / 6 * (SCH.trace1 - SCH.trace0), 0.06, 0.5) : 0;
+    sdot(f, Ps(Wv[i]), { r: 9, s: E.outBack(wp, 2.4) * (1 + 0.35 * tb), color: ice, core: '#FFFFFF', halo: 2 + 2 * tb, alpha: 1 });
+  }
+  // ---- the three crossings (pop at 9, 10, 11; fly into the diagonals at 28.3 + k)
+  if (ok) for (let k = 0; k < 3; k++) {
+    const pu = clamp((n - (9 + k)) / 0.3);
+    if (pu <= 0) continue;
+    let p = X[k], s = E.outBack(pu, 2.6), a = 1;
+    if (pre) {
+      const ev = S.flightK(n, k);
+      if (ev >= 1) continue;
+      p = G.lerp2(X[k], G.lerp2(Wv[k], Wv[k + 3], 0.5), ev); s *= 1 - ev;
+    } else a = twinA;
+    if (a > 0.003) sdot(f, Ps(p), { r: 10.5, s, color: PAIR[k], core: '#FFFFFF', halo: 3.2, alpha: a });
+  }
+  // ---- the Brianchon point (born from the shrinking red line at 32)
+  const bs = clamp((n - 31.9) / 0.25);
+  if (bs > 0) {
+    const hi = pulse(n, 32, 0.05, 1.6) + pulse(n, 68, 0.04, 2);
+    sdot(f, Ps(Bp), { r: 11.5, s: E.outBack(bs, 2.4) * (1 + 0.25 * hi), color: PAL.red, core: '#FFFFFF', halo: 3.5 + 4 * hi, alpha: 1 });
+  }
+  // ---- point numbers 1–6 (so "in order" and "opposite" are unambiguous)
+  const la = 1 - ramp(16.5, 17.5, n);
+  if (la > 0.003) {
+    const O = Ps([st.C.x, st.C.y]);
     for (let i = 0; i < 6; i++) {
-      const a = A[i], wm = Wp[(i + 5) % 6], wp = Wp[i];
-      const Tm = G.lerp2(a, wm, u), Tp = G.lerp2(a, wp, u);
-      const Tn = G.lerp2(A[(i + 1) % 6], wp, u);
-      sline(f, Ps(Tm), Ps(Tp), { w: 3.2, color: ice, alpha: 1 });                          // vertex → tangent segment
-      sline(f, Ps(Tp), Ps(Tn), { w: 3.2, color: mixHex(PAL.gold, ice, u), alpha: 1 - 0.6 * u * u }); // side → its pole
+      const t0 = bt(SCH.pt(i) + 0.08);
+      if (t < t0) continue;
+      const q = As[i], d = G.nrm(G.sub(q, O)), p = [q[0] + d[0] * 40, q[1] + d[1] * 40];
+      letters(f, String(i + 1), { font: 'SM', size: 46, x: p[0], y: p[1], fill: PAL.cream, alpha: la, anim: popIn(t, t0, 0, 0.24, { rot: 0.1 }), D: Math.floor(t * FPS / 2), seed: 70 + i, amp: 0.4, knock: 7 });
+    }
+  }
+  // ---- corner numbers 1–6 of the circumscribed hexagon (so "opposite corners" 1–4, 2–5, 3–6 are unambiguous)
+  const lw = pre ? 1 - ramp(31.1, 31.6, n) : 0;
+  if (lw > 0.003 && n > SCH.wpop(0)) {
+    const O = Ps([st.C.x, st.C.y]);
+    for (let i = 0; i < 6; i++) {
+      const t0 = bt(SCH.wpop(i) + 0.06);
+      if (t < t0) continue;
+      const q = Ps(Wv[i]), d = G.nrm(G.sub(q, O)), p = [q[0] + d[0] * 40, q[1] + d[1] * 40];
+      letters(f, String(i + 1), { font: 'SM', size: 44, x: p[0], y: p[1], fill: '#DDF6FF', alpha: lw, anim: popIn(t, t0, 0, 0.24, { rot: 0.1 }), D: Math.floor(t * FPS / 2), seed: 90 + i, amp: 0.4, knock: 7 });
+    }
+  }
+}
+
+// beats 72.4–80: dual back (12-gon morph u, diagonals → crossings v), then the twin end card
+function drawBack(f, st, t, n) {
+  const P = st.P, A = st.A, pas = st.pas, bri = st.bri, sc = st.cam.s, u = st.u, v = st.v;
+  const Ps = (p) => P(S3(p));
+  const X = pas.X, ok = X.every(Boolean), Wv = bri.W, Bp = bri.B, ice = PAL.ice;
+  const morphing = u > 1e-4 && u < 1 - 1e-4, inV = v > 1e-4 && v < 1 - 1e-4;
+  const late = ramp(76, 77, n);                                         // end card: the dual twin comes back as an overlay
+  const As = A.map(Ps);
+  if (u <= 1e-4) {
+    if (late > 0.003) {
+      for (let i = 0; i < 6; i++) wline(f, P, S3(Wv[(i + 5) % 6]), S3(Wv[i]), { w: 3.2, color: ice, alpha: 0.75 * late });
+      for (let i = 0; i < 6; i++) sdot(f, Ps(Wv[i]), { r: 7.5, color: ice, alpha: 0.7 * late });
+    }
+    for (let i = 0; i < 6; i++) sline(f, As[i], As[(i + 1) % 6], { w: 3.2, color: mixHex(PAL.gold, PAIR[i % 3], 0.85), alpha: 1 });
+    const aExt = 0.55 * ramp(74.0, 74.5, n);
+    if (ok && aExt > 0.003) for (let k = 0; k < 3; k++) for (const side of [k, k + 3]) {
+      const p = A[side], q = A[(side + 1) % 6], near = G.dist(p, X[k]) < G.dist(q, X[k]) ? p : q;
+      sline(f, Ps(near), Ps(G.add(X[k], G.mul(G.nrm(G.sub(X[k], near)), 46 / sc))), { w: 2.2, color: PAIR[k], alpha: aExt * 0.9 });
+    }
+    for (let i = 0; i < 6; i++) sdot(f, As[i], { r: 8.5, color: PAL.gold, alpha: 1 });
+  } else if (morphing) {
+    for (let i = 0; i < 6; i++) {
+      const a = A[i], wm = Wv[(i + 5) % 6], wp = Wv[i];
+      const Tm = G.lerp2(a, wm, u), Tp = G.lerp2(a, wp, u), Tn = G.lerp2(A[(i + 1) % 6], wp, u);
+      sline(f, Ps(Tm), Ps(Tp), { w: 3.2, color: ice, alpha: 1 });                                    // tangent segment → vertex
+      sline(f, Ps(Tp), Ps(Tn), { w: 3.2, color: mixHex(PAL.gold, ice, u), alpha: 1 - 0.6 * u * u });  // pole → side
       sdot(f, Ps(a), { r: 7.5 - 2.5 * u, color: mixHex(PAL.gold, ice, u), alpha: 1 });
     }
+  } else {
+    for (let i = 0; i < 6; i++) wline(f, P, S3(Wv[(i + 5) % 6]), S3(Wv[i]), { w: 3.2, color: ice, alpha: 1 });
+    for (let i = 0; i < 6; i++) sdot(f, As[i], { r: 5.5, color: ice, core: '#0B1320', alpha: 0.9 });
+    for (let i = 0; i < 6; i++) sdot(f, Ps(Wv[i]), { r: 7.5, color: ice, alpha: 1 });
   }
-  // ---------- tangential world (u = 1): flat or lifted
-  const aTan = n < 52.5 ? (u >= 1 - 1e-4 ? 1 : 0) : (u >= 1 - 1e-4 ? 1 : lateTan);
-  if (aTan > 0.003 && !morphing) drawTangential(f, st, n, aTan, is3D);
-  // ---------- crossings → diagonals and Pascal line → point (v-morph) / steady states
-  drawDualPieces(f, st, t, n, { aPasc, sliceU, twinA });
-}
-
-function drawTangential(f, st, n, aT, is3D) {
-  const P = st.P, bri = st.bri, Lf = st.lift, lam = st.lam, A = st.A;
-  const ice = PAL.ice;
-  const late = n >= 52.5 && st.u < 1e-4;          // recap overlay (with the inscribed hexagon)
-  const lifted = lam > 1e-3;
-  const V = Lf.V;
-  const Wf = bri.W.map((w) => [w[0], w[1], 0]);
-  // floor shadow (planar Brianchon figure) while lifted
-  const shadowA = lifted ? clamp(lam / 0.15) : 0;
-  if (lifted) {
-    for (let i = 0; i < 6; i++) wline(f, P, Wf[(i + 5) % 6], Wf[i], { w: 2, color: ice, alpha: 0.42 * aT * shadowA, dash: [10, 9] });
-    for (let i = 0; i < 6; i++) { const q0 = P(V[i]), q1 = P(Wf[i]); sline(f, q0, q1, { w: 1.4, color: PAL.cream, alpha: 0.3 * aT * shadowA, dash: [4, 7] }); }
-  }
-  // sides (tilted when lifted). side i: V[i-1] → V[i], passes through the tangent point A_i on the floor
-  for (let i = 0; i < 6; i++) {
-    const a = lifted ? V[(i + 5) % 6] : Wf[(i + 5) % 6], b = lifted ? V[i] : Wf[i];
-    if (lifted) seg3(f, P, a, b, { w: 3.2, color: ice, alpha: aT * (late ? 0.75 : 1) });
-    else wline(f, P, a, b, { w: 3.2, color: ice, alpha: aT * (late ? 0.75 : 1) });
-  }
-  // tangent points
-  for (let i = 0; i < 6; i++) sdot(f, P([A[i][0], A[i][1], 0]), { r: 5.5, color: ice, core: '#0B1320', alpha: aT * (late ? 0.0 : 0.9) });
-  // vertices
-  for (let i = 0; i < 6; i++) sdot(f, P(lifted ? V[i] : Wf[i]), { r: 7.5, color: ice, alpha: aT * (late ? 0.7 : 1) });
-}
-// 3-D segment: the part under the floor is drawn fainter
-function seg3(f, P, a, b, o) {
-  if ((a[2] >= 0 && b[2] >= 0) || (a[2] <= 0 && b[2] <= 0)) {
-    const under = a[2] + b[2] < 0;
-    wline(f, P, a, b, { ...o, alpha: o.alpha * (under ? 0.5 : 1) });
-    return;
-  }
-  const u = a[2] / (a[2] - b[2]), m = G.lerp3(a, b, u);
-  wline(f, P, a, m, { ...o, alpha: o.alpha * (a[2] < 0 ? 0.5 : 1) });
-  wline(f, P, m, b, { ...o, alpha: o.alpha * (b[2] < 0 ? 0.5 : 1) });
-}
-
-function drawHyperboloid(f, st, n) {
-  const a = ramp(34, 35.6, n) * (1 - ramp(43.5, 45, n));
-  if (a <= 0.003) return;
-  const P = st.P, C = st.C, lam = st.lam * S.LSIGN, R = C.r, N = 22;
-  const tm = 1.3 * R;
-  for (const fam of [1, -1]) {
-    for (let j = 0; j < N; j++) {
-      const ph = (j / N) * Math.PI * 2 + (fam > 0 ? 0 : Math.PI / N);
-      const A0 = [C.x + R * Math.cos(ph), C.y + R * Math.sin(ph)], T = G.tanDir(ph);
-      const p = [A0[0] - T[0] * tm, A0[1] - T[1] * tm, -fam * lam * tm], q = [A0[0] + T[0] * tm, A0[1] + T[1] * tm, fam * lam * tm];
-      seg3(f, P, p, q, { w: 1.3, color: PAL.ice, alpha: 0.2 * a, depth: false });
+  // diagonals (shrinking back into the crossings) / recap overlay
+  const dA = v >= 1 - 1e-4 ? 1 : inV ? 1 : 0.7 * late;
+  if (dA > 0.003) for (let k = 0; k < 3; k++) {
+    const W0 = Wv[k], W1 = Wv[k + 3];
+    if (inV) {
+      const ev = E.io2(v), M = G.lerp2(W0, W1, 0.5), cen = G.lerp2(X[k] || M, M, ev);
+      const d = G.nrm(G.sub(W1, W0)), hl = ev * (G.dist(W0, W1) / 2 + 24 / sc);
+      sline(f, Ps(G.sub(cen, G.mul(d, hl))), Ps(G.add(cen, G.mul(d, hl))), { w: 3, color: PAIR[k], alpha: 1 });
+    } else {
+      const [a, b] = G.extend(W0, W1, 24 / sc, 24 / sc);
+      sline(f, Ps(a), Ps(b), { w: 3, color: PAIR[k], halo: 2, alpha: dA });
     }
   }
-  // rims
-  for (const z of [lam * tm, -lam * tm]) {
-    const rr = Math.sqrt(R * R + tm * tm), pts = [];
-    for (let i = 0; i <= 96; i++) { const ph = (i / 96) * Math.PI * 2; pts.push(P([C.x + rr * Math.cos(ph), C.y + rr * Math.sin(ph), z])); }
-    spoly(f, pts, { w: 1.5, color: PAL.ice, alpha: (z > 0 ? 0.32 : 0.16) * a });
-  }
-}
-
-function drawDualPieces(f, st, t, n, o) {
-  const P = st.P, pas = st.pas, bri = st.bri, Lf = st.lift, v = st.v, sc = st.cam.s, lam = st.lam;
-  const Ps = (p) => P(S3(p));
-  const X = pas.X, ok = X.every(Boolean);
-  const Bp = bri.B;
-  const inV = v > 1e-4 && v < 1 - 1e-4;
-  const lifted = lam > 1e-3;
-  // ---- the Pascal line (red) and its three crossings
-  if (ok && (v < 1 - 1e-4 || (o.twinA > 0.003 && n < 52.5))) {
-    const span = pascalSpan(X, 80 / sc);
+  // red line growing back out of the red point, and the crossings
+  if (ok && v < 1 - 1e-4) {
+    const span = G.spanOf(X, 80 / sc);
     let a = span[0], b = span[1];
     if (inV) { const ev = E.io2(v); a = G.lerp2(a, Bp, ev); b = G.lerp2(b, Bp, ev); }
-    const aL = inV ? 1 : o.aPasc;
-    if (n < 4.0 && n >= 3.8) {
-      sline(f, Ps(a), Ps(b), { w: 4.4, color: PAL.red, to: E.in2(o.sliceU), tip: true, tipR: 30, halo: 4, alpha: 1 });
-    } else if (n >= 4.0) {
-      const flash = pulse(n, 4, 0.05, 1.2);
-      sline(f, Ps(a), Ps(b), { w: 4.4 + 3 * flash, color: mixHex(PAL.red, '#FFD0D8', flash * 0.6), halo: 4.5, alpha: aL });
-    }
-    // crossings
+    const fl = pulse(n, 74.5, 0.05, 1.0);
+    sline(f, Ps(a), Ps(b), { w: 4.4 + 3 * fl, color: mixHex(PAL.red, '#FFD0D8', fl * 0.6), halo: 4.5, alpha: 1 });
     for (let k = 0; k < 3; k++) {
-      const pu = n < 12 ? xPopK(n, k) : 1;
-      if (pu <= 0) continue;
-      let p = X[k], s = E.outBack(pu, 2.6);
-      if (inV) { const ev = E.io2(v); const M = G.lerp2(bri.W[k], bri.W[k + 3], 0.5); p = G.lerp2(X[k], M, ev); s *= 1 - v; }
-      const aX = inV ? 1 : o.aPasc;
-      sdot(f, Ps(p), { r: 10.5, s, color: PAIR[k], core: '#FFFFFF', halo: 3.2, alpha: aX });
+      let p = X[k], s = 1;
+      if (inV) { const ev = E.io2(v); p = G.lerp2(X[k], G.lerp2(Wv[k], Wv[k + 3], 0.5), ev); s = 1 - v; }
+      sdot(f, Ps(p), { r: 10.5, s, color: PAIR[k], core: '#FFFFFF', halo: 3.2, alpha: 1 });
     }
   }
-  // ---- diagonals (growing out of the crossings during the morph) and the Brianchon point
-  const aDiag = inV ? 1 : (v >= 1 - 1e-4 ? 1 : 0);
-  const recap = n >= 56 ? ramp(56, 57, n) : 0;
-  const diagA = n >= 52.5 && v < 1e-4 ? 0.7 * recap : aDiag;
-  if (diagA > 0.003) {
-    for (let k = 0; k < 3; k++) {
-      const W0 = bri.W[k], W1 = bri.W[k + 3];
-      if (inV) {
-        const ev = E.io2(v), M = G.lerp2(W0, W1, 0.5), cen = G.lerp2(X[k] || M, M, ev);
-        const d = G.nrm(G.sub(W1, W0)), hl = ev * (G.dist(W0, W1) / 2 + 24 / sc);
-        sline(f, Ps(G.sub(cen, G.mul(d, hl))), Ps(G.add(cen, G.mul(d, hl))), { w: 3, color: PAIR[k], alpha: 1 });
-      } else if (lifted) {
-        // floor shadow of the diagonals + the space diagonals (drawn on at beats 36/36.5/37)
-        const sh = clamp(lam / 0.2);
-        wline(f, P, [W0[0], W0[1], 0], [W1[0], W1[1], 0], { w: 2, color: PAIR[k], alpha: 0.32 * sh, dash: [10, 9] });
-        const dr = E.out2(clamp((n - (36 + 0.5 * k)) / 0.45));
-        const glow = 0.25 * planeGlow(n, k) + 0.25 * planeGlow(n, (k + 2) % 3);
-        if (dr > 0) {
-          const [a3, b3] = ext3(Lf.V[k], Lf.V[k + 3], 0.1);
-          const q0 = P(a3), q1 = P(b3);
-          sline(f, q0, q1, { w: 3.2 + 2 * glow, color: PAIR[k], to: dr, tip: dr < 1, halo: 2 + 3 * glow, alpha: 1 });
-        }
-      } else {
-        const [a, b] = G.extend(W0, W1, 24 / sc, 24 / sc);
-        const hi = n >= 64 ? 0 : pulse(n, 16, 0.05, 1.5) + pulse(n, 48, 0.04, 1.8);
-        sline(f, Ps(a), Ps(b), { w: 3 + 2 * hi, color: PAIR[k], halo: 2 + 2 * hi, alpha: diagA });
-      }
-    }
-  }
-  // ---- planes through pairs of space diagonals (the heart of the 3-D proof)
-  if (lifted) {
-    for (let k = 0; k < 3; k++) {
-      const g = planeGlow(n, k);
-      if (g <= 0.003) continue;
-      const V = Lf.V, q = [V[k], V[(k + 1) % 6], V[(k + 3) % 6], V[(k + 4) % 6]].map(P);
-      const col = mixHex(PAIR[k], PAIR[(k + 1) % 3], 0.5);
-      sfill(f, q, col, 0.2 * g);
-      for (let e = 0; e < 4; e++) sline(f, q[e], q[(e + 1) % 4], { w: 1.6, color: col, alpha: 0.55 * g, dash: [8, 8] });
-    }
-  }
-  // ---- the Brianchon point / its 3-D ancestor
-  if (lifted) {
-    // shadow point on the floor
-    sdot(f, P([Bp[0], Bp[1], 0]), { r: 7, color: PAL.red, core: '#FFD9DF', alpha: 0.55 * clamp(lam / 0.2) });
-    const qp = clamp((n - 40.4) / 0.35);
-    if (qp > 0) {
-      const q = P(Lf.Q);
-      sdot(f, q, { r: 11, s: E.outBack(qp, 2.6), color: PAL.red, core: '#FFFFFF', halo: 4 + 3 * pulse(n, 42, 0.05, 1.2), alpha: 1 });
-    }
-    // the vertical beam: "look straight down"
-    const ba = ramp(44.2, 45, n);
-    if (ba > 0) {
-      const q0 = P(Lf.Q), q1 = P([Bp[0], Bp[1], 0]);
-      sline(f, q0, q1, { w: 10, color: PAL.cream, alpha: 0.12 * ba });
-      sline(f, q0, q1, { w: 2.2, color: PAL.cream, alpha: 0.85 * ba, dash: [6, 7], dashOff: -t * 60 });
-    }
-  } else if (v > 0.85 || (n >= 52.5 && v > 1e-4)) {
-    const bs = inV ? clamp((v - 0.82) / 0.18) : 1;
-    const hi = pulse(n, 16, 0.05, 1.6) + pulse(n, 48, 0.04, 2);
-    sdot(f, Ps(Bp), { r: 11.5, s: E.outBack(bs, 2.4) * (1 + 0.25 * hi), color: PAL.red, core: '#FFFFFF', halo: 3.5 + 4 * hi, alpha: 1 });
-  } else if (n >= 56 && v < 1e-4) {
-    sdot(f, Ps(Bp), { r: 10, color: PAL.red, core: '#FFFFFF', halo: 3, alpha: recap });
-  }
-  // ---- bar 6 twin: O, the perpendicular O→B→ℓ and the right angle
-  const oa = ramp(25.2, 26, n) * (1 - ramp(28.2, 29, n));
-  if (oa > 0.003 && ok) {
-    const O = [st.C.x, st.C.y];
-    const foot = footOn(pas.line, O);
-    sline(f, Ps(O), Ps(foot), { w: 1.8, color: PAL.cream, alpha: 0.75 * oa, dash: [9, 8] });
-    sdot(f, Ps(O), { r: 5, color: PAL.cream, alpha: oa });
-    rightMark(f, Ps, foot, O, pas.line, 22 / sc, oa);
-  }
-}
-const xPopK = (n, k) => clamp((n - (2.4 + 0.5 * k)) / 0.3);
-function ext3(a, b, e) { const d = G.sub3(b, a); return [G.sub3(a, G.mul3(d, e)), G.add3(b, G.mul3(d, e))]; }
-function planeGlow(n, k) { const n0 = 37.5 + 0.75 * k; return pulse(n, n0, 0.12, 0.9) * 0.7 + 0.3 * ramp(n0, n0 + 0.3, n) * (1 - ramp(40.2, 41, n)); }
-function footOn(l, p) { const d = G.lineDist(l, p), nn = G.nrm([l[0], l[1]]); return [p[0] - nn[0] * d, p[1] - nn[1] * d]; }
-function rightMark(f, Ps, foot, O, l, s, a) {
-  const d1 = G.nrm(G.sub(O, foot)), d2 = G.nrm([-l[1], l[0]]);
-  const p1 = G.add(foot, G.mul(d1, s)), p2 = G.add(p1, G.mul(d2, s)), p3 = G.add(foot, G.mul(d2, s));
-  sline(f, Ps(p1), Ps(p2), { w: 1.8, color: PAL.cream, alpha: 0.8 * a });
-  sline(f, Ps(p2), Ps(p3), { w: 1.8, color: PAL.cream, alpha: 0.8 * a });
+  // the red point
+  const bA = v >= 1 - 1e-4 ? 1 : inV ? clamp((v - 0.82) / 0.18) : late;
+  if (bA > 0.003) sdot(f, Ps(Bp), { r: 11.5, s: inV ? E.outBack(bA, 2.4) : 1, color: PAL.red, core: '#FFFFFF', halo: 3.5, alpha: inV ? 1 : bA });
 }
 
 // ------------------------------------------------------------------ hand (touch indicator) for the drags
@@ -405,103 +373,105 @@ function drawImpacts(f, st, t, n) {
   const P = st.P, pas = st.pas, bri = st.bri;
   const Ps = (p) => P(S3(p));
   const at = (n0, d) => (t - bt(n0)) / d;
-  // bar 1: the red line lands
-  if (pas.X.every(Boolean) && n > 3.9 && n < 6) {
-    for (let k = 0; k < 3; k++) { const q = Ps(pas.X[k]); ringWave(f, q, at(4, 0.55), { R: 120, w: 4, color: PAIR[k] }); rays(f, q, at(4, 0.4), { n: 10, R0: 22, R1: 120, w: 5, seed: k + 1, color: PAL.cream }); }
-  }
-  // bar 3 end: "still collinear" on the hyperbola
-  if (pas.X.every(Boolean) && n > 10.9 && n < 12.5) { const q = Ps(pas.X[1]); ringWave(f, q, at(11, 0.6), { R: 140, w: 4, color: PAL.red }); }
-  // bar 4: Brianchon point
-  if (n > 15.9 && n < 18) {
+  const X = pas.X, ok = X.every(Boolean);
+  // the crossings pop (9, 10, 11)
+  if (ok && n > 8.9 && n < 11.8) for (let k = 0; k < 3; k++) ringWave(f, Ps(X[k]), at(9 + k, 0.45), { R: 76, w: 3.5, color: PAIR[k] });
+  // slam 1: the red line lands
+  if (ok && n > 11.9 && n < 14) for (let k = 0; k < 3; k++) { const q = Ps(X[k]); ringWave(f, q, at(12, 0.55), { R: 120, w: 4, color: PAIR[k] }); rays(f, q, at(12, 0.4), { n: 10, R0: 22, R1: 120, w: 5, seed: k + 1, color: PAL.cream }); }
+  // point → tangent line
+  if (n > 20.5 && n < 24) for (let i = 0; i < 6; i++) ringWave(f, Ps(st.A[i]), at(SCH.tan(i), 0.45), { R: 56, w: 3, color: PAL.ice });
+  // the six corners of the circumscribed hexagon pop one by one
+  if (n > 24.4 && n < 26.6) for (let i = 0; i < 6; i++) ringWave(f, Ps(bri.W[i]), at(SCH.wpop(i), 0.45), { R: 54, w: 3, color: PAL.ice });
+  // crossing k → diagonal k: its two opposite vertices light up
+  if (n > 28.2 && n < 31.6) for (let k = 0; k < 3; k++) for (const j of [k, k + 3]) ringWave(f, Ps(bri.W[j]), at(SCH.fly(k), 0.6), { R: 64, w: 3.5, color: PAIR[k] });
+  // slam 2: the Brianchon point
+  if (n > 31.9 && n < 34) {
     const q = Ps(bri.B);
-    ringWave(f, q, at(16, 0.6), { R: 170, w: 5, color: PAL.red }); ringWave(f, q, at(16.25, 0.6), { R: 240, w: 3, color: PAL.cream });
-    rays(f, q, at(16, 0.42), { n: 16, R0: 26, R1: 190, w: 6, seed: 7, color: PAL.cream });
-    sparks(f, q, at(16, 0.7), { n: 16, R: 230, seed: 4, colors: [PAL.cream, PAL.red, PAL.gold] });
+    ringWave(f, q, at(32, 0.6), { R: 170, w: 5, color: PAL.red }); ringWave(f, q, at(32.25, 0.6), { R: 240, w: 3, color: PAL.cream });
+    rays(f, q, at(32, 0.42), { n: 16, R0: 26, R1: 190, w: 6, seed: 7, color: PAL.cream });
+    sparks(f, q, at(32, 0.7), { n: 16, R: 230, seed: 4, colors: [PAL.cream, PAL.red, PAL.gold] });
   }
-  // 3-D: the single meeting point
-  if (st.lam > 0.05 && n > 41.9 && n < 44) { const q = P(st.lift.Q); ringWave(f, q, at(42, 0.6), { R: 130, w: 4, color: PAL.red }); sparkle(f, q, 46 * (1 - clamp(at(42, 0.5))), at(42, 1) * 3, PAL.cream, 1 - clamp(at(42, 0.5))); }
+  // 3-D step 1: adjacent tilted sides still meet at every vertex
+  if (st.lam > 0.05 && n > 52 && n < 54.5) for (let i = 0; i < 6; i++) ringWave(f, P(st.lift.V[i]), at(52.2 + 0.25 * i, 0.55), { R: 58, w: 3.5, color: PAL.cream });
+  // 3-D step 4: the single meeting point
+  if (st.lam > 0.05 && n > 61.9 && n < 64) { const q = P(st.lift.Q); ringWave(f, q, at(62, 0.6), { R: 130, w: 4, color: PAL.red }); sparkle(f, q, 46 * (1 - clamp(at(62, 0.5))), at(62, 1) * 3, PAL.cream, 1 - clamp(at(62, 0.5))); }
   // HERO slam
-  if (n > 47.95 && n < 51) {
+  if (n > 67.95 && n < 71) {
     const q = Ps(bri.B);
-    ringWave(f, q, at(48, 0.5), { R: 260, w: 9, color: PAL.cream });
-    ringWave(f, q, at(48.12, 0.7), { R: 420, w: 6, color: PAL.red });
-    ringWave(f, q, at(48.3, 0.9), { R: 620, w: 4, color: PAL.ice });
-    rays(f, q, at(48, 0.5), { n: 26, R0: 40, R1: 520, w: 10, seed: 11, color: PAL.cream });
-    sparks(f, q, at(48, 0.9), { n: 28, R: 460, seed: 9, w: 4, colors: [PAL.cream, PAL.red, PAL.gold, PAL.ice] });
+    ringWave(f, q, at(68, 0.5), { R: 260, w: 9, color: PAL.cream });
+    ringWave(f, q, at(68.12, 0.7), { R: 420, w: 6, color: PAL.red });
+    ringWave(f, q, at(68.3, 0.9), { R: 620, w: 4, color: PAL.ice });
+    rays(f, q, at(68, 0.5), { n: 26, R0: 40, R1: 520, w: 10, seed: 11, color: PAL.cream });
+    sparks(f, q, at(68, 0.9), { n: 28, R: 460, seed: 9, w: 4, colors: [PAL.cream, PAL.red, PAL.gold, PAL.ice] });
   }
-  // bar 13: Pascal again
-  if (pas.X.every(Boolean) && n > 54.9 && n < 57) {
-    for (let k = 0; k < 3; k++) { const q = Ps(pas.X[k]); ringWave(f, q, at(55, 0.55), { R: 110, w: 4, color: PAIR[k] }); }
-  }
+  // Pascal again
+  if (ok && n > 74.4 && n < 76.5) for (let k = 0; k < 3; k++) ringWave(f, Ps(X[k]), at(74.5, 0.55), { R: 110, w: 4, color: PAIR[k] });
 }
 
 // ------------------------------------------------------------------ texts
 const TY = 250, TY2 = 368, CY = 1610;
-const T = [];   // {n0, n1, s, font, size, y, x, fill, hl, ent, ext, draw}
+const T = [];   // {n0, n1, s, font, size, y, x, fill, hl, ent}
 const add = (o) => T.push(o);
-// bar 0 — the hook
-add({ n0: -0.6, n1: 1.25, s: '圆上任取[6]个点', size: 100, y: TY, ent: 'pop' });
-add({ n0: 1.25, n1: 2.0, s: '连成六边形', size: 100, y: TY, ent: 'pop' });
-add({ n0: 2.0, n1: 3.95, s: '延长三组[对边]', size: 100, y: TY, ent: 'pop' });
-add({ n0: 4.0, n1: 5.5, s: '三个交点 · [共线]！', size: 112, y: TY, ent: 'slam', hl: PAL.red });
-add({ n0: 5.5, n1: 7.95, s: '[帕斯卡]定理', size: 112, y: TY, ent: 'draw', hl: PAL.gold });
-add({ n0: 6.1, n1: 7.95, s: '1639年 · 帕斯卡才16岁', font: 'SM', size: 52, y: TY2 + 8, ent: 'pop', fill: PAL.gold });
-add({ n0: 5.35, n1: 7.9, s: '随便拖 · 永远共线', font: 'WK', size: 62, y: CY, ent: 'pop' });
-// bar 2 — conics
-add({ n0: 8.0, n1: 10.95, s: '换成别的[圆锥曲线]？', size: 92, y: TY, ent: 'pop' });
-add({ n0: 8.4, n1: 9.4, s: '[椭圆]', font: 'WK', size: 76, y: CY - 16, ent: 'pop', hl: PAL.gold });
-add({ n0: S.TL.s2b, n1: S.TL.h2 - 0.08, s: '[抛物线]', font: 'WK', size: 76, y: CY - 16, ent: 'pop', hl: PAL.gold });
-add({ n0: S.TL.h2 + 0.3, n1: S.TL.h3, s: '[双曲线]', font: 'WK', size: 76, y: CY - 16, ent: 'pop', hl: PAL.gold });
-add({ n0: 11.0, n1: 11.95, s: '照样 · [共线]！', size: 112, y: TY, ent: 'slam', hl: PAL.red });
-add({ n0: 8.5, n1: 11.95, s: '都是圆的“影子” · 直线的影子还是直线', font: 'SM', size: 48, y: TY2 + 8, ent: 'pop', fill: PAL.gold });
-// bar 3 — duality
-add({ n0: 12.0, n1: 15.95, s: '把[点]和[线]互换', size: 104, y: TY, ent: 'pop', hl: PAL.ice });
-add({ n0: 12.6, n1: 13.95, s: '顶点 → 切线　边 → 顶点', font: 'WK', size: 58, y: CY, ent: 'pop' });
-add({ n0: 14.0, n1: 15.95, s: '交点 → 对角线　红线 → 红点', font: 'WK', size: 58, y: CY, ent: 'pop' });
-// bar 4 — Brianchon
-add({ n0: 16.0, n1: 17.45, s: '三条对角线', size: 100, y: TY - 58, ent: 'slam' });
-add({ n0: 16.15, n1: 17.45, s: '交于[一点]！', size: 112, y: TY + 70, ent: 'slam', hl: PAL.red });
-add({ n0: 17.5, n1: 23.95, s: '[布列安桑]定理', size: 112, y: TY, ent: 'draw', hl: PAL.ice });
-add({ n0: 18.2, n1: 23.95, s: '1806年 · 他还是个大学生', font: 'SM', size: 52, y: TY2 + 8, ent: 'pop', fill: PAL.ice });
-add({ n0: 18.9, n1: 19.95, s: '比帕斯卡晚了167年', font: 'WK', size: 60, y: CY, ent: 'pop' });
-add({ n0: 20.0, n1: 23.9, s: '随便拖 · 永远共点', font: 'WK', size: 62, y: CY, ent: 'pop' });
-// bar 6 — twins
-add({ n0: 24.0, n1: 27.95, s: '一对[镜像双胞胎]', size: 100, y: TY, ent: 'pop', hl: PAL.gold });
-add({ n0: 24.6, n1: 27.95, s: '红线 ⇄ 红点 · 同步移动', font: 'SM', size: 52, y: TY2 + 8, ent: 'pop', fill: PAL.cream });
-add({ n0: 25.6, n1: 27.9, s: '（行话：极线 ⇄ 极点）', font: 'WK', size: 54, y: CY, ent: 'pop', fill: PAL.cream });
-// bar 7 — why? go 3-D
-add({ n0: 28.0, n1: 29.95, s: '可是 · [凭什么]？', size: 108, y: TY, ent: 'pop', hl: PAL.red });
-add({ n0: 30.0, n1: 31.95, s: '升到[三维]！', size: 128, y: TY, ent: 'slam', hl: PAL.gold });
-add({ n0: 30.4, n1: 31.95, s: '平面里难证 · 到空间里一眼看穿', font: 'SM', size: 52, y: TY2 + 30, ent: 'pop', fill: PAL.cream });
-// bar 8 — lift
-add({ n0: 32.0, n1: 33.95, s: '六条边 · 一上一下翘起来', font: 'SM', size: 66, y: TY, ent: 'pop' });
-add({ n0: 32.4, n1: 35.95, s: '相邻两边照样相交（切线长相等）', font: 'WK', size: 50, y: CY, ent: 'pop' });
-add({ n0: 34.0, n1: 35.95, s: '全都躺在一张[双曲面]上', font: 'SM', size: 66, y: TY, ent: 'pop', hl: PAL.ice });
-add({ n0: 34.5, n1: 35.95, s: '（广州塔“小蛮腰”的形状）', font: 'WK', size: 46, y: TY2 - 6, ent: 'pop', fill: PAL.ice });
-// bar 9 — space diagonals & planes
-add({ n0: 36.0, n1: 39.95, s: '三条[空间对角线]', size: 96, y: TY, ent: 'pop', hl: PAL.gold });
-add({ n0: 37.5, n1: 39.95, s: '每两条 · 都在同一个平面里', font: 'WK', size: 58, y: CY, ent: 'pop' });
-// bar 10 — logic
-add({ n0: 40.0, n1: 43.95, s: '两两相交 · 又不共面', font: 'SM', size: 70, y: TY - 50, ent: 'pop' });
-add({ n0: 41.85, n1: 43.95, s: '⇒ 只能交于[同一点]', size: 92, y: TY + 66, ent: 'slam', hl: PAL.red });
-// bar 11 — set up the slam
-add({ n0: 44.0, n1: 47.9, s: '从正上方打光 · 看[影子]', size: 96, y: TY, ent: 'pop', hl: PAL.gold });
-add({ n0: 45.0, n1: 47.9, s: '空间里交于一点 → 影子也交于一点', font: 'WK', size: 50, y: CY, ent: 'pop' });
-// bar 12 — HERO
-add({ n0: 48.0, n1: 51.95, s: '[降维打击]！', size: 150, y: TY + 10, ent: 'slam', hl: PAL.red, big: 3.2 });
-add({ n0: 49.6, n1: 51.95, s: '布列安桑定理 · 证毕 ■', font: 'SM', size: 58, y: TY2 + 46, ent: 'pop', fill: PAL.ice });
-// bar 13 — dual back
-add({ n0: 52.0, n1: 54.95, s: '再[对偶]回去', size: 104, y: TY, ent: 'pop', hl: PAL.gold });
-add({ n0: 55.0, n1: 55.95, s: '[帕斯卡定理]也成立！', size: 100, y: TY, ent: 'slam', hl: PAL.red });
-add({ n0: 55.35, n1: 55.95, s: '一个证明 · 白送一个定理', font: 'WK', size: 58, y: CY, ent: 'pop', fill: PAL.gold });
-// bar 14 — the dictionary
-add({ n0: 56.0, n1: 59.95, s: '对偶字典', size: 104, y: TY, ent: 'draw', hl: PAL.gold });
-const DROW = [[56.5, '点', '线'], [57.5, '共线', '共点'], [58.5, '内接', '外切']];
-// bar 15 — end card
-add({ n0: 60.0, n1: 99, s: '帕斯卡 ⇄ 布列安桑', size: 96, y: TY, ent: 'draw', hl: PAL.gold });
-add({ n0: 60.75, n1: 99, s: '点和线 · 互为[镜像]', font: 'SM', size: 70, y: 1300, ent: 'pop', hl: PAL.gold });
-add({ n0: 61.5, n1: 99, s: '几何定理系列 · 01', font: 'SM', size: 44, y: 1410, ent: 'pop', fill: PAL.goldD });
-add({ n0: 62.25, n1: 99, s: '你还见过哪些「对偶」？评论区聊', font: 'WK', size: 52, y: CY, ent: 'pop', fill: PAL.cream });
+// ① Pascal, one step at a time
+add({ n0: -0.6, n1: 4.0, s: '圆上随便取[6]个点', size: 100, y: TY, ent: 'pop' });
+add({ n0: 4.0, n1: 6.0, s: '按顺序连成[六边形]', size: 100, y: TY, ent: 'pop' });
+add({ n0: 6.0, n1: 8.0, s: '六边形有[3组对边]', size: 100, y: TY, ent: 'pop' });
+add({ n0: 6.35, n1: 9.05, s: '面对面的两条边 · 同色为一组', font: 'WK', size: 56, y: CY, ent: 'pop' });
+add({ n0: 8.0, n1: 11.2, s: '把每组对边[延长]', size: 100, y: TY, ent: 'pop' });
+add({ n0: 9.1, n1: 11.95, s: '每组都交出1个点', font: 'WK', size: 58, y: CY, ent: 'pop' });
+add({ n0: 11.2, n1: 12.0, s: '这3个交点……', size: 100, y: TY, ent: 'pop' });
+add({ n0: 12.0, n1: 16.0, s: '竟然在[一条直线]上！', size: 108, y: TY, ent: 'slam', hl: PAL.red });
+add({ n0: 13.0, n1: 16.0, s: '随便拖 · 永远共线', font: 'WK', size: 62, y: CY, ent: 'pop' });
+add({ n0: 16.0, n1: 20.0, s: '[帕斯卡]定理', size: 112, y: TY, ent: 'draw', hl: PAL.gold });
+add({ n0: 16.6, n1: 20.0, s: '1639年 · 帕斯卡才16岁', font: 'SM', size: 52, y: TY2 + 8, ent: 'pop', fill: PAL.gold });
+add({ n0: 17.2, n1: 20.0, s: '圆内接六边形 · 三组对边的交点共线', font: 'WK', size: 54, y: CY, ent: 'pop' });
+// ② the dual, one piece at a time
+add({ n0: 20.0, n1: 24.0, s: '把[点]换成[线]', size: 104, y: TY, ent: 'pop', hl: PAL.ice });
+add({ n0: 20.4, n1: 24.0, s: '圆上每个点 → 过这点的切线', font: 'WK', size: 58, y: CY, ent: 'pop' });
+add({ n0: 24.0, n1: 28.0, s: '6条切线 · 围成新的六边形', size: 92, y: TY, ent: 'pop' });
+add({ n0: 25.0, n1: 28.0, s: '它把圆包在里面 · 叫「外切六边形」', font: 'WK', size: 54, y: CY, ent: 'pop' });
+add({ n0: 28.0, n1: 31.2, s: '把[交点]换成[连线]', size: 104, y: TY, ent: 'pop', hl: PAL.ice });
+add({ n0: 28.3, n1: 31.95, s: '交点 → 连接两个相对顶点的「对角线」', font: 'WK', size: 52, y: CY, ent: 'pop' });
+add({ n0: 31.2, n1: 32.0, s: '这3条对角线……', size: 100, y: TY, ent: 'pop' });
+add({ n0: 32.0, n1: 36.0, s: '竟然[交于一点]！', size: 108, y: TY, ent: 'slam', hl: PAL.red });
+add({ n0: 32.3, n1: 36.0, s: '红线 → 红点 · 共线 → 共点', font: 'SM', size: 52, y: TY2 + 8, ent: 'pop', fill: PAL.cream });
+add({ n0: 32.9, n1: 36.0, s: '随便拖 · 永远共点', font: 'WK', size: 62, y: CY, ent: 'pop' });
+add({ n0: 36.0, n1: 40.0, s: '[布列安桑]定理', size: 112, y: TY, ent: 'draw', hl: PAL.ice });
+add({ n0: 36.6, n1: 40.0, s: '1806年 · 他还是个大学生', font: 'SM', size: 52, y: TY2 + 8, ent: 'pop', fill: PAL.ice });
+add({ n0: 37.2, n1: 40.0, s: '圆外切六边形 · 三条对角线共点', font: 'WK', size: 54, y: CY, ent: 'pop' });
+// ③ twins, duality, why?
+add({ n0: 40.0, n1: 44.0, s: '一对[镜像双胞胎]', size: 100, y: TY, ent: 'pop', hl: PAL.gold });
+add({ n0: 40.4, n1: 44.0, s: '数学家叫它「对偶」', font: 'SM', size: 54, y: TY2 + 8, ent: 'pop', fill: PAL.cream });
+const DROW = [[40.8, '点', '线'], [41.6, '交点', '连线'], [42.4, '共线', '共点']];
+add({ n0: 44.0, n1: 48.0, s: '可是 · [凭什么]？', size: 108, y: TY, ent: 'pop', hl: PAL.red });
+add({ n0: 44.6, n1: 48.0, s: '3条对角线 · 凭什么一定交于一点？', font: 'SM', size: 50, y: TY2 + 12, ent: 'pop', fill: PAL.cream });
+// ④ the 3-D proof, five numbered steps
+add({ n0: 48.0, n1: 50.0, s: '升到[三维]！', size: 128, y: TY, ent: 'slam', hl: PAL.gold });
+add({ n0: 48.4, n1: 50.0, s: '平面里难证 · 到空间里一眼看穿', font: 'SM', size: 52, y: TY2 + 30, ent: 'pop', fill: PAL.cream });
+add({ n0: 50.0, n1: 52.0, s: '6条边 · 一上一下翘起来', font: 'SM', size: 68, y: TY, ent: 'pop' });
+add({ n0: 52.0, n1: 54.0, s: '相邻两边 · 照样相交', font: 'SM', size: 68, y: TY, ent: 'pop' });
+add({ n0: 52.3, n1: 54.0, s: '同一顶点的两段切线一样长 → 翘起来一样高', font: 'WK', size: 48, y: CY, ent: 'pop' });
+add({ n0: 54.0, n1: 56.0, s: '全都躺在一张「小蛮腰」曲面上', font: 'SM', size: 64, y: TY, ent: 'pop' });
+add({ n0: 54.4, n1: 56.0, s: '广州塔就是这个形状 · 叫单叶双曲面', font: 'WK', size: 46, y: TY2 - 6, ent: 'pop', fill: PAL.ice });
+add({ n0: 56.0, n1: 58.0, s: '连出3条[空间对角线]', size: 92, y: TY, ent: 'pop', hl: PAL.gold });
+add({ n0: 58.0, n1: 60.0, s: '每两条 · 都在同一个平面里', font: 'SM', size: 64, y: TY, ent: 'pop' });
+add({ n0: 58.3, n1: 60.0, s: '同一平面里的两条线（不平行）→ 一定相交', font: 'WK', size: 48, y: CY, ent: 'pop' });
+add({ n0: 60.0, n1: 64.0, s: '两两相交 · 又不共面', font: 'SM', size: 70, y: TY - 38, ent: 'pop' });
+add({ n0: 62.0, n1: 64.0, s: '⇒ 只能交于[同一点]！', size: 92, y: TY + 84, ent: 'slam', hl: PAL.red });
+add({ n0: 62.4, n1: 64.0, s: '（否则3个交点围成三角形 · 3条线就共面了）', font: 'WK', size: 44, y: CY, ent: 'pop' });
+add({ n0: 64.0, n1: 68.0, s: '从正上方打光 · 看[影子]', size: 96, y: TY, ent: 'pop', hl: PAL.gold });
+add({ n0: 65.5, n1: 68.0, s: '空间里交于一点 → 影子也交于一点', font: 'WK', size: 50, y: CY, ent: 'pop' });
+// ⑤ the slam, dual back, end card
+add({ n0: 68.0, n1: 72.0, s: '[降维打击]！', size: 150, y: TY + 10, ent: 'slam', hl: PAL.red, big: 3.2 });
+add({ n0: 69.6, n1: 72.0, s: '布列安桑定理 · 证毕 ■', font: 'SM', size: 58, y: TY2 + 46, ent: 'pop', fill: PAL.ice });
+add({ n0: 72.0, n1: 74.5, s: '再[对偶]回去', size: 104, y: TY, ent: 'pop', hl: PAL.gold });
+add({ n0: 72.5, n1: 74.6, s: '线 → 点 · 共点 → 共线', font: 'WK', size: 58, y: CY, ent: 'pop' });
+add({ n0: 74.5, n1: 76.5, s: '[帕斯卡定理]也成立！', size: 100, y: TY, ent: 'slam', hl: PAL.red });
+add({ n0: 74.85, n1: 78.3, s: '一个证明 · 白送一个定理', font: 'WK', size: 58, y: CY, ent: 'pop', fill: PAL.gold });
+add({ n0: 76.5, n1: 99, s: '帕斯卡 ⇄ 布列安桑', size: 96, y: TY, ent: 'draw', hl: PAL.gold });
+add({ n0: 77.1, n1: 99, s: '点和线 · 互为[镜像]', font: 'SM', size: 70, y: 1300, ent: 'pop', hl: PAL.gold });
+add({ n0: 77.7, n1: 99, s: '几何定理系列 · 01', font: 'SM', size: 44, y: 1410, ent: 'pop', fill: PAL.goldD });
+add({ n0: 78.3, n1: 99, s: '你还见过哪些「对偶」？评论区聊', font: 'WK', size: 52, y: CY, ent: 'pop', fill: PAL.cream });
 
 // a line leaves just before the next line that lands in the same place
 let SLOTTED = false;
@@ -514,8 +484,31 @@ function slotTexts() {
   }
   SLOTTED = true;
 }
+// 3-D proof progress: ①②③④⑤ at the top
+const STEPS = [50, 54, 56, 60, 64];
+function drawSteps(f, t, n) {
+  const a = ramp(49.6, 50.2, n) * (1 - ramp(67.6, 68.0, n));
+  if (a <= 0.003) return;
+  let cur = -1; STEPS.forEach((n0, i) => { if (n >= n0) cur = i; });
+  const y = 128, dx = 96;
+  f.save(); f.globalAlpha *= a;
+  f.lineWidth = 3; f.strokeStyle = rgba(PAL.goldD, 0.45); f.beginPath(); f.moveTo(540 - 2 * dx + 30, y); f.lineTo(540 + 2 * dx - 30, y); f.stroke();
+  for (let i = 0; i < 5; i++) {
+    const x = 540 + (i - 2) * dx, on = i === cur, done = i < cur;
+    const pop = on ? E.outBack(clamp((n - STEPS[i]) / 0.3), 2.6) : 1;
+    const r = on ? 22 + 8 * pop : 20;
+    if (on) { const g = f.createRadialGradient(x, y, 0, x, y, r * 2.4); g.addColorStop(0, rgba(PAL.gold, 0.45)); g.addColorStop(1, rgba(PAL.gold, 0)); f.fillStyle = g; f.beginPath(); f.arc(x, y, r * 2.4, 0, Math.PI * 2); f.fill(); }
+    f.beginPath(); f.arc(x, y, r + 4, 0, Math.PI * 2); f.fillStyle = 'rgba(11,19,32,0.92)'; f.fill();
+    f.beginPath(); f.arc(x, y, r, 0, Math.PI * 2);
+    if (on || done) { f.fillStyle = on ? PAL.gold : rgba(PAL.goldD, 0.75); f.fill(); }
+    f.lineWidth = 3; f.strokeStyle = on ? PAL.cream : rgba(PAL.goldD, 0.9); f.stroke();
+    letters(f, String(i + 1), { font: 'SM', size: on ? 30 + 8 * pop : 28, x, y: y + 1, fill: on || done ? '#0B1320' : PAL.goldD, knock: 0, amp: 0.25, D: Math.floor(t * FPS / 2), seed: 90 + i });
+  }
+  f.restore();
+}
 function drawTexts(f, t, n) {
   if (!SLOTTED) slotTexts();
+  drawSteps(f, t, n);
   for (let j = 0; j < T.length; j++) {
     const o = T[j];
     const exitD = 0.32;
@@ -532,27 +525,22 @@ function drawTexts(f, t, n) {
     else anim = popIn(t, t0, 0.035, 0.24, { rot: 0.14 });
     letters(f, o.s, { font, size, x: o.x ?? 540, y: o.y, fill: o.fill ?? PAL.cream, hl: o.hl ?? PAL.gold, anim, draw, D: Math.floor(t * FPS / 2), seed: j + 1, amp: font === 'WK' ? 0.9 : 0.45 });
   }
-  // dictionary rows
-  if (n >= 56.4 && n < 60.4) {
+  // duality dictionary (twins bar)
+  if (n >= 40.7 && n < 44.4) {
     DROW.forEach(([n0, a, b], r) => {
       if (n < n0) return;
       const y = 1290 + r * 112, t0 = bt(n0);
-      const out = n >= 59.95 ? dropOut(t, bt(59.95), 0.22, { dist: 22 }) : null;
+      const out = n >= 43.95 ? dropOut(t, bt(43.95), 0.22, { dist: 22 }) : null;
       const pa = out || popIn(t, t0, 0.04, 0.24), pb = out || popIn(t, t0 + 0.12, 0.04, 0.24), pc = out || popIn(t, t0 + 0.06, 0, 0.24);
-      letters(f, a, { font: 'SB', size: 76, x: 430, y, align: 'right', fill: PAL.gold, anim: pa, seed: 40 + r });
+      letters(f, a, { font: 'SB', size: 76, x: 450, y, align: 'right', fill: PAL.gold, anim: pa, seed: 40 + r });
       letters(f, '⇄', { font: 'SB', size: 70, x: 540, y, fill: PAL.cream, anim: pc, seed: 50 + r });
-      letters(f, b, { font: 'SB', size: 76, x: 650, y, align: 'left', fill: PAL.ice, anim: pb, seed: 60 + r });
+      letters(f, b, { font: 'SB', size: 76, x: 630, y, align: 'left', fill: PAL.ice, anim: pb, seed: 60 + r });
     });
-  }
-  // eccentricity read-out during the conic morph
-  if (n > 8.3 && n < S.TL.h3 + 0.4) {
-    const e = S.conicAt(n).e, a = ramp(8.3, 8.6, n) * (1 - ramp(S.TL.h3, S.TL.h3 + 0.3, n));
-    letters(f, 'e = ' + e.toFixed(2), { font: 'SM', size: 44, x: 540, y: CY + 78, fill: PAL.goldD, alpha: a, amp: 0.3 });
   }
 }
 
 // ------------------------------------------------------------------ bloom + post
-function bloomAt(n) { return 0.9 + 0.8 * pulse(n, 4, 0.04, 1) + 0.9 * pulse(n, 16, 0.04, 1.4) + 1.4 * pulse(n, 48, 0.03, 2) + 0.6 * pulse(n, 55, 0.04, 1) + 0.5 * pulse(n, 64, 0.04, 1.2); }
+function bloomAt(n) { return 0.9 + 0.8 * pulse(n, 12, 0.04, 1) + 0.9 * pulse(n, 32, 0.04, 1.4) + 1.4 * pulse(n, 68, 0.03, 2) + 0.6 * pulse(n, 74.5, 0.04, 1); }
 function composite(fg, n) {
   const src = fg.canvas;
   const b1 = IMG.b1.getContext('2d'), b2 = IMG.b2.getContext('2d');
@@ -572,7 +560,7 @@ function composite(fg, n) {
 function post(t, n) {
   c.save(); c.setTransform(dpr, 0, 0, dpr, 0, 0);
   // flashes
-  const fl = 0.1 * pulse(n, 4, 0.02, 0.3) + 0.25 * pulse(n, 16, 0.02, 0.4) + 0.75 * pulse(n, 48, 0.015, 0.55) + 0.18 * pulse(n, 55, 0.02, 0.35) + 0.25 * pulse(n, 64, 0.02, 0.5);
+  const fl = 0.1 * pulse(n, 12, 0.02, 0.3) + 0.25 * pulse(n, 32, 0.02, 0.4) + 0.75 * pulse(n, 68, 0.015, 0.55) + 0.18 * pulse(n, 74.5, 0.02, 0.35);
   if (fl > 0.003) { c.globalCompositeOperation = 'lighter'; c.globalAlpha = Math.min(1, fl); c.fillStyle = '#FFF1D6'; c.fillRect(0, 0, W, H); }
   // grain (re-rolled every 2 frames)
   const g = Math.floor(t * FPS / 2);
@@ -582,7 +570,7 @@ function post(t, n) {
   c.globalCompositeOperation = 'source-over'; c.globalAlpha = 1;
   c.drawImage(IMG.vig, 0, 0, W, H);
   // fade in / out
-  const fo = clamp((t - (DUR - 0.55)) / 0.5) + (t < 0.05 ? 1 - t / 0.05 : 0);
+  const fo = clamp((t - (DUR - 0.6)) / 0.55) + (t < 0.05 ? 1 - t / 0.05 : 0);
   if (fo > 0) { c.globalAlpha = clamp(fo); c.fillStyle = '#05080F'; c.fillRect(0, 0, W, H); }
   c.restore();
 }

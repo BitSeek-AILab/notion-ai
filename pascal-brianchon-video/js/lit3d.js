@@ -1,4 +1,4 @@
-// Lit 3-D section (beats 30–48) — "升到三维".
+// Lit 3-D section (beats 48–68) — "升到三维".
 // The planar Brianchon figure floats up off the floor (its shadow stays behind under an overhead light), its sides
 // tilt into rulings of a one-sheet hyperboloid (cel-shaded translucent glass, like Canton Tower), the three space
 // diagonals meet at Q, and the overhead light shows that the shadow of it all is exactly the planar figure.
@@ -202,24 +202,24 @@ export function drawLit3D(f, st, t, n, LY) {
   const lam = st.lam * S.LSIGN, h0 = st.h0, sc = st.cam.s;
   const eye = eyeOf(st.cam);
   const flat = lam < 0.05;
-  const lit = ramp(30, 30.6, n);                                   // 2-D line style → lit style right after the lift-off
+  const lit = ramp(48, 48.6, n);                                   // 2-D line style → lit style right after the lift-off
   const sh = clamp(h0 / 40);                                       // the shadow emerges from under the figure
   const ice = PAL.ice;
   const l2 = Math.max(lam * lam, 1e-6);
   const facing = flat ? () => 1 : (p) => (p[0] - C.x) * (eye[0] - p[0]) + (p[1] - C.y) * (eye[1] - p[1]) - ((p[2] - h0) / l2) * (eye[2] - p[2]);
   const facingWaist = flat ? () => 1 : (p) => (p[0] - C.x) * (eye[0] - p[0]) + (p[1] - C.y) * (eye[1] - p[1]);
   // ---------- schedules
-  const dA = n < 36 ? 1 - ramp(31.6, 32.4, n) : 0;                // the floating planar diagonals + B (before the tilt)
-  const drK = (k) => (n < 36 ? 0 : E.out2(clamp((n - (36 + 0.5 * k)) / 0.45)));
-  const qp = clamp((n - 40.4) / 0.35);
-  const grow = E.out2(ramp(34, 35.4, n, 'lin'));
-  const aH = ramp(34, 34.8, n) * (1 - ramp(43.5, 45, n));          // hyperboloid
-  const ov = ramp(44.5, 45.3, n);                                   // the shadow shown in the planar colours
-  const rayA = ramp(44.2, 45, n) * (1 - ramp(47.6, 48, n));         // "light from straight above"
-  const fd = 1 - 0.45 * ramp(44.9, 45.6, n) * (1 - ramp(47.1, 47.55, n));   // the floating figure steps back while we read its shadow
+  const dA = n < 56 ? 1 - ramp(49.6, 50.4, n) : 0;                // the floating planar diagonals + B (before the tilt)
+  const drK = (k) => (n < 56.5 ? 0 : E.out2(clamp((n - (56.5 + 0.5 * k)) / 0.45)));
+  const qp = clamp((n - 62) / 0.35);
+  const grow = E.out2(ramp(54, 55.4, n, 'lin'));
+  const aH = ramp(54, 54.8, n) * (1 - ramp(63.5, 65, n)) * (1 - 0.5 * ramp(58.05, 58.3, n) * (1 - ramp(61.2, 61.8, n)));   // hyperboloid (steps back while the planes are shown)
+  const ov = ramp(64.5, 65.3, n);                                   // the shadow shown in the planar colours
+  const rayA = ramp(64.2, 65, n) * (1 - ramp(67.6, 68, n));         // "light from straight above"
+  const fd = 1 - 0.45 * ramp(64.9, 65.6, n) * (1 - ramp(67.1, 67.55, n));   // the floating figure steps back while we read its shadow
   const Wf = Wv.map((w) => [w[0], w[1], 0]);
-  // ---------- a soft beam of light from straight above (beats 44–48)
-  const beamA = ramp(44, 44.8, n) * (1 - ramp(47.55, 48, n));
+  // ---------- a soft beam of light from straight above (beats 64–68)
+  const beamA = ramp(64, 64.8, n) * (1 - ramp(67.55, 68, n));
   if (beamA > 0.003) {
     const o = P([C.x, C.y, 0]), hw = 1.7 * R * o[2] * sc, tw = 0.35 * hw;
     f.save(); f.globalCompositeOperation = 'lighter';
@@ -259,7 +259,7 @@ export function drawLit3D(f, st, t, n, LY) {
       for (let i = 0; i < 6; i++) sline(f, P(Wf[(i + 5) % 6]), P(Wf[i]), { w: 3.2, color: ice, alpha: 0.9 * ov, halo: 2.4 });
       for (let k = 0; k < 3; k++) { const e = ext3(V[k], V[k + 3], 0.1); sline(f, P([e[0][0], e[0][1], 0]), P([e[1][0], e[1][1], 0]), { w: 3.2, color: PAIR[k], alpha: 0.95 * ov, halo: 2.4 }); }
       const q = P([B[0], B[1], 0]);
-      ball(f, q, 10.5 * Math.sqrt(q[2]), BALL.red, { alpha: ov * qp, halo: 3.4 + 2.5 * pulse(n, 45.6, 0.1, 1.4) });
+      ball(f, q, 10.5 * Math.sqrt(q[2]), BALL.red, { alpha: ov * qp, halo: 3.4 + 2.5 * pulse(n, 65.6, 0.1, 1.4) });
     }
   }
   // ---------- the hyperboloid: compute faces once, paint into back / front layers
@@ -328,9 +328,10 @@ export function drawLit3D(f, st, t, n, LY) {
     const g = planeGlow(n, k);
     if (g <= 0.003) continue;
     const q = [V[k], V[(k + 1) % 6], V[(k + 3) % 6], V[(k + 4) % 6]].map(P);
-    const col = mixHex(PAIR[k], PAIR[(k + 1) % 3], 0.5);
-    sfill(f, q, col, 0.22 * g);
-    for (let e = 0; e < 4; e++) sline(f, q[e], q[(e + 1) % 4], { w: 1.6, color: col, alpha: 0.55 * g, dash: [8, 8] });
+    const col = mixHex(mixHex(PAIR[k], PAIR[(k + 1) % 3], 0.5), '#FFFFFF', 0.25);
+    sfill(f, q, col, 0.4 * g);
+    // its two edges along the hexagon (opposite sides) solid, the other two dashed
+    for (let e = 0; e < 4; e++) sline(f, q[e], q[(e + 1) % 4], e % 2 ? { w: 1.8, color: col, alpha: 0.7 * g, dash: [8, 8] } : { w: 2.6, color: col, alpha: 0.9 * g, halo: 2 * g });
   }
   for (let k = 0; k < 3; k++) {
     const dk = mixHex(PAIR[k], '#0B1320', 0.5);
@@ -340,14 +341,14 @@ export function drawLit3D(f, st, t, n, LY) {
     }
     const dr = drK(k);
     if (dr > 0 && !flat) {
-      const glow = 0.25 * planeGlow(n, k) + 0.25 * planeGlow(n, (k + 2) % 3);
+      const glow = 0.6 * planeGlow(n, k) + 0.6 * planeGlow(n, (k + 2) % 3);
       const [a3, b3] = ext3(V[k], V[k + 3], 0.1);
       tube(f, P(a3), P(b3), { w: 5 + 2 * glow, color: PAIR[k], dark: dk, lit: 1, to: dr, tip: dr < 1, halo: 1 + 2 * glow, alpha: fd });
     }
   }
   // the planar B while floating, then the space point Q
   if (dA > 0.003) { const q = P([B[0], B[1], h0]); ball(f, q, 11 * Math.sqrt(q[2]), BALL.red, { lit, alpha: dA, halo: 3 }); }
-  if (qp > 0 && !flat) { const q = P(Q); ball(f, q, 12 * Math.sqrt(q[2]) * E.outBack(qp, 2.6), BALL.red, { halo: 3.5 + 3 * pulse(n, 42, 0.05, 1.2) }); }
+  if (qp > 0 && !flat) { const q = P(Q); ball(f, q, 12 * Math.sqrt(q[2]) * E.outBack(qp, 2.6), BALL.red, { halo: 3.5 + 3 * pulse(n, 62, 0.05, 1.2) }); }
   // ---------- near sheet
   if (faces) { const lf = LY.get(2); lf.setTransform(f.getTransform()); paintFaces(lf, faces, true); blitLayer(f, lf, 0.3 * aH); }
   drawRul(rul.front, true);
@@ -377,7 +378,8 @@ export function drawLit3D(f, st, t, n, LY) {
   }
   drawSurfacePieces(true);
   // ---------- vertical light rays: every point drops straight down onto its shadow
-  const dropA = Math.min(1, sh) * (0.14 + 0.66 * rayA);
+  const emph = ramp(52, 52.4, n) * (1 - ramp(53.8, 54.3, n));            // step 1: "相邻两边照样相交" — vertex heights
+  const dropA = Math.min(1, sh) * (0.14 + 0.66 * Math.max(rayA, 0.75 * emph));
   if (dropA > 0.003) {
     const dash = [5 + 2 * rayA, 8], off = -t * 70 * rayA;
     for (let i = 0; i < 6; i++) sline(f, P(V[i]), P(Wf[i]), { w: 1.5 + 0.8 * rayA, color: PAL.cream, alpha: dropA, dash, dashOff: off });
@@ -389,7 +391,7 @@ export function drawLit3D(f, st, t, n, LY) {
   }
   // Q glows through the glass
   if (qp > 0 && !flat) {
-    const q = bp(P(Q)), r = 30 + 26 * pulse(n, 42, 0.05, 1.2);
+    const q = bp(P(Q)), r = 30 + 26 * pulse(n, 62, 0.05, 1.2);
     f.save(); f.globalCompositeOperation = 'lighter';
     const g = f.createRadialGradient(q[0], q[1], 0, q[0], q[1], r);
     g.addColorStop(0, rgba('#FF8FA3', 0.35 * qp)); g.addColorStop(1, rgba(PAL.red, 0));
@@ -397,4 +399,4 @@ export function drawLit3D(f, st, t, n, LY) {
   }
 }
 function ext3(a, b, e) { const d = G.sub3(b, a); return [G.sub3(a, G.mul3(d, e)), G.add3(b, G.mul3(d, e))]; }
-function planeGlow(n, k) { const n0 = 37.5 + 0.75 * k; return pulse(n, n0, 0.12, 0.9) * 0.7 + 0.3 * ramp(n0, n0 + 0.3, n) * (1 - ramp(40.2, 41, n)); }
+function planeGlow(n, k) { const n0 = 58.2 + 0.75 * k; return pulse(n, n0, 0.12, 0.9) * 0.7 + 0.3 * ramp(n0, n0 + 0.3, n) * (1 - ramp(61, 61.8, n)); }
