@@ -56,6 +56,7 @@ function ffmpeg(a) {
       const ts = (args[1] || '0').split(',').map(Number);
       const dir = path.join(ROOT, 'out', opt('dir', 'stills')); fs.mkdirSync(dir, { recursive: true });
       const page = await openPage(browser, port, scale);
+      if (opt('cam', null)) await page.evaluate((c) => { window.__CAMO = JSON.parse(c); }, opt('cam', null));
       for (const t of ts) {
         const t0 = Date.now();
         await page.evaluate((t) => window.renderAt(t), t);
@@ -64,7 +65,7 @@ function ffmpeg(a) {
       }
       await page.close();
     } else {
-      const FPS = 30, DUR = parseFloat(opt('dur', '48.45'));
+      const FPS = 30, DUR = parseFloat(opt('dur', String((await import('./js/scene.js')).DUR)));   // default: the film length from js/scene.js
       const from = parseFloat(opt('from', '0')), to = parseFloat(opt('to', String(DUR)));
       const f0 = Math.round(from * FPS), f1 = Math.round(to * FPS);
       const workers = parseInt(opt('workers', '2'));

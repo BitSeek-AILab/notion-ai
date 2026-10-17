@@ -9,9 +9,11 @@
 import { PAL, PAIR, clamp, lerp, inv, E, K, hs, Layers } from './engine.js';
 import * as G from './geo.js';
 import * as S from './scene.js';
-import { BOIL, bp, rgba, mixHex, tip, sline, wline, spoly, sdot, sfill, ringWave, rays, sparkle, sparks } from './draw.js';
+import { BOIL, bp, rgba, mixHex, tip, sline, wline, spoly, sdot, sfill, ringWave, rays, sparkle, sparks, check, bD } from './draw.js';
 import { loadGlyphs, letters, measure, popIn, slamIn, dropOut } from './text.js';
-import { drawLit3D, drawPool } from './lit3d.js';
+import { drawPool } from './lit3d.js';
+import { drawSpace } from './space.js';
+import { drawFlat, demoAt } from './duality.js';
 
 export const W = S.W, H = S.H, FPS = S.FPS, DUR = S.DUR;
 const bt = S.bt;
@@ -50,7 +52,7 @@ export async function init(canvas, dprIn = 1) {
 }
 
 // ------------------------------------------------------------------ camera shake (impacts)
-const HITS = [[12, 7, 0.10], [32, 6, 0.12], [68, 22, 0.16], [74.5, 7, 0.1]];
+const HITS = [[140, 4, 0.2], [256, 4, 0.2]];   // v3 calm: only a whisper on the two 降维打击 landings
 function shakeAt(t) {
   let x = 0, y = 0;
   for (const [n0, A, tau] of HITS) {
@@ -99,7 +101,7 @@ const SCH = {
   wpop: (i) => 24.5 + 0.3 * i,         // its six vertices pop one by one, numbered
   trace0: 26.3, trace1: 27.2,          // then its six sides are traced in one stroke
   fly: (k) => 28.3 + k,                // crossing k flies into diagonal k (S.flightK)
-  shrink0: 31.4, slam2: 32,            // red line shrinks into the red point
+  shrink0: 31.66, slam2: 32,            // red line shrinks into the red point
 };
 function circlePts(st) {
   const C = st.C, P = st.P, out = [];
@@ -107,16 +109,18 @@ function circlePts(st) {
   return out;
 }
 function drawFigure(f, st, t, n) {
-  // ---------- overhead lamp: a soft light pool on the floor for the whole 3-D act
+  // ---------- overhead lamp: a soft light pool on the floor for the two 3-D acts
   const w3v = S.w3(n);
-  if (w3v > 0.003) drawPool(f, st, w3v * (0.7 + 0.5 * ramp(64, 64.5, n)));
-  // ---------- the lit 3-D act (floating / lifted figure, hyperboloid, shadows) has its own renderer
-  if (st.h0 > 0.5 || st.lam > 1e-3) { drawLit3D(f, st, t, n, LY); return; }
+  if (w3v > 0.003) drawPool(f, st, w3v * (0.7 + 0.5 * (n < 200 ? ramp(128.4, 129.2, n) : 0)));
+  // ---------- Acts II and IV (lifted figure, hyperboloid, shadows) have their own renderer
+  if (st.h0 > 0.5 || st.lam > 1e-3) { drawSpace(f, st, t, n, LY); return; }
+  // ---------- after Act I: flat parts (Brianchon after the slam, Act III duality, Pascal, outro)
+  if (n >= 48) { drawFlat(f, st, t, n); return; }
   const cps = circlePts(st);
   const cA = 1 - 0.5 * ramp(24.3, 24.9, n) * (1 - ramp(27.4, 28.0, n));   // the circle steps back while the new hexagon is shown
   if (t < 0.6) spoly(f, cps, { w: 3.2, color: PAL.gold, to: E.io2(clamp((t - 0.06) / 0.5)), tip: true, tipR: 22, alpha: 1 });
   else spoly(f, cps, { w: 3.2, color: PAL.gold, closed: true, alpha: cA });
-  if (n < 72.4) drawForward(f, st, t, n); else drawBack(f, st, t, n);
+  drawForward(f, st, t, n);
 }
 
 // beats 0–72.4: the Pascal figure is built step by step, then turned into its dual piece by piece
@@ -249,7 +253,7 @@ function drawForward(f, st, t, n) {
       const t0 = bt(SCH.pt(i) + 0.08);
       if (t < t0) continue;
       const q = As[i], d = G.nrm(G.sub(q, O)), p = [q[0] + d[0] * 40, q[1] + d[1] * 40];
-      letters(f, String(i + 1), { font: 'SM', size: 46, x: p[0], y: p[1], fill: PAL.cream, alpha: la, anim: popIn(t, t0, 0, 0.24, { rot: 0.1 }), D: Math.floor(t * FPS / 2), seed: 70 + i, amp: 0.4, knock: 7 });
+      letters(f, String(i + 1), { font: 'SM', size: 46, x: p[0], y: p[1], fill: PAL.cream, alpha: la, anim: popIn(t, t0, 0, 0.24, { rot: 0.1 }), D: bD(t), seed: 70 + i, amp: 0.4, knock: 7 });
     }
   }
   // ---- corner numbers 1–6 of the circumscribed hexagon (so "opposite corners" 1–4, 2–5, 3–6 are unambiguous)
@@ -260,7 +264,7 @@ function drawForward(f, st, t, n) {
       const t0 = bt(SCH.wpop(i) + 0.06);
       if (t < t0) continue;
       const q = Ps(Wv[i]), d = G.nrm(G.sub(q, O)), p = [q[0] + d[0] * 40, q[1] + d[1] * 40];
-      letters(f, String(i + 1), { font: 'SM', size: 44, x: p[0], y: p[1], fill: '#DDF6FF', alpha: lw, anim: popIn(t, t0, 0, 0.24, { rot: 0.1 }), D: Math.floor(t * FPS / 2), seed: 90 + i, amp: 0.4, knock: 7 });
+      letters(f, String(i + 1), { font: 'SM', size: 44, x: p[0], y: p[1], fill: '#DDF6FF', alpha: lw, anim: popIn(t, t0, 0, 0.24, { rot: 0.1 }), D: bD(t), seed: 90 + i, amp: 0.4, knock: 7 });
     }
   }
 }
@@ -370,42 +374,45 @@ function touch(f, p, press, alpha, t, n0) {
 
 // ------------------------------------------------------------------ impacts
 function drawImpacts(f, st, t, n) {
+  // v3 calm: every "aha" is marked by one or two soft expanding rings only (no rays, sparks or white-outs)
   const P = st.P, pas = st.pas, bri = st.bri;
   const Ps = (p) => P(S3(p));
   const at = (n0, d) => (t - bt(n0)) / d;
   const X = pas.X, ok = X.every(Boolean);
   // the crossings pop (9, 10, 11)
-  if (ok && n > 8.9 && n < 11.8) for (let k = 0; k < 3; k++) ringWave(f, Ps(X[k]), at(9 + k, 0.45), { R: 76, w: 3.5, color: PAIR[k] });
+  if (ok && n > 8.9 && n < 11.8) for (let k = 0; k < 3; k++) ringWave(f, Ps(X[k]), at(9 + k, 0.5), { R: 70, w: 3, color: PAIR[k] });
   // slam 1: the red line lands
-  if (ok && n > 11.9 && n < 14) for (let k = 0; k < 3; k++) { const q = Ps(X[k]); ringWave(f, q, at(12, 0.55), { R: 120, w: 4, color: PAIR[k] }); rays(f, q, at(12, 0.4), { n: 10, R0: 22, R1: 120, w: 5, seed: k + 1, color: PAL.cream }); }
+  if (ok && n > 11.9 && n < 14) for (let k = 0; k < 3; k++) ringWave(f, Ps(X[k]), at(12, 0.7), { R: 100, w: 3.5, color: PAIR[k] });
   // point → tangent line
-  if (n > 20.5 && n < 24) for (let i = 0; i < 6; i++) ringWave(f, Ps(st.A[i]), at(SCH.tan(i), 0.45), { R: 56, w: 3, color: PAL.ice });
+  if (n > 20.5 && n < 24) for (let i = 0; i < 6; i++) ringWave(f, Ps(st.A[i]), at(SCH.tan(i), 0.5), { R: 52, w: 3, color: PAL.ice });
   // the six corners of the circumscribed hexagon pop one by one
-  if (n > 24.4 && n < 26.6) for (let i = 0; i < 6; i++) ringWave(f, Ps(bri.W[i]), at(SCH.wpop(i), 0.45), { R: 54, w: 3, color: PAL.ice });
+  if (n > 24.4 && n < 26.6) for (let i = 0; i < 6; i++) ringWave(f, Ps(bri.W[i]), at(SCH.wpop(i), 0.5), { R: 50, w: 3, color: PAL.ice });
   // crossing k → diagonal k: its two opposite vertices light up
-  if (n > 28.2 && n < 31.6) for (let k = 0; k < 3; k++) for (const j of [k, k + 3]) ringWave(f, Ps(bri.W[j]), at(SCH.fly(k), 0.6), { R: 64, w: 3.5, color: PAIR[k] });
+  if (n > 28.2 && n < 31.6) for (let k = 0; k < 3; k++) for (const j of [k, k + 3]) ringWave(f, Ps(bri.W[j]), at(SCH.fly(k), 0.6), { R: 60, w: 3, color: PAIR[k] });
   // slam 2: the Brianchon point
-  if (n > 31.9 && n < 34) {
+  if (n > 31.9 && n < 34) ringWave(f, Ps(bri.B), at(32, 0.8), { R: 150, w: 4, color: PAL.red });
+  // Act II ④: the single meeting point Q
+  if (st.lam > 0.05 && n > 123.95 && n < 126.5) ringWave(f, P(st.lift.Q), at(124, 0.8), { R: 140, w: 4, color: PAL.red });
+  // 降维打击: the figure lands on its shadow — the Brianchon point
+  if (n > 139.95 && n < 143) {
     const q = Ps(bri.B);
-    ringWave(f, q, at(32, 0.6), { R: 170, w: 5, color: PAL.red }); ringWave(f, q, at(32.25, 0.6), { R: 240, w: 3, color: PAL.cream });
-    rays(f, q, at(32, 0.42), { n: 16, R0: 26, R1: 190, w: 6, seed: 7, color: PAL.cream });
-    sparks(f, q, at(32, 0.7), { n: 16, R: 230, seed: 4, colors: [PAL.cream, PAL.red, PAL.gold] });
+    ringWave(f, q, at(140, 0.9), { R: 240, w: 5, color: PAL.cream });
+    ringWave(f, q, at(140.25, 1.1), { R: 380, w: 3.5, color: PAL.red });
   }
-  // 3-D step 1: adjacent tilted sides still meet at every vertex
-  if (st.lam > 0.05 && n > 52 && n < 54.5) for (let i = 0; i < 6; i++) ringWave(f, P(st.lift.V[i]), at(52.2 + 0.25 * i, 0.55), { R: 58, w: 3.5, color: PAL.cream });
-  // 3-D step 4: the single meeting point
-  if (st.lam > 0.05 && n > 61.9 && n < 64) { const q = P(st.lift.Q); ringWave(f, q, at(62, 0.6), { R: 130, w: 4, color: PAL.red }); sparkle(f, q, 46 * (1 - clamp(at(62, 0.5))), at(62, 1) * 3, PAL.cream, 1 - clamp(at(62, 0.5))); }
-  // HERO slam
-  if (n > 67.95 && n < 71) {
-    const q = Ps(bri.B);
-    ringWave(f, q, at(68, 0.5), { R: 260, w: 9, color: PAL.cream });
-    ringWave(f, q, at(68.12, 0.7), { R: 420, w: 6, color: PAL.red });
-    ringWave(f, q, at(68.3, 0.9), { R: 620, w: 4, color: PAL.ice });
-    rays(f, q, at(68, 0.5), { n: 26, R0: 40, R1: 520, w: 10, seed: 11, color: PAL.cream });
-    sparks(f, q, at(68, 0.9), { n: 28, R: 460, seed: 9, w: 4, colors: [PAL.cream, PAL.red, PAL.gold, PAL.ice] });
+  // Act III: 你在我的线上 ⇔ 我在你的线上
+  if (n > 183.95 && n < 186.5) {
+    const dm = demoAt(n);
+    [[dm.Pp, '#FFE3A3'], [dm.Qp, PAL.c2]].forEach(([p, col]) => ringWave(f, Ps(p), at(184, 0.8), { R: 120, w: 4, color: col }));
   }
-  // Pascal again
-  if (ok && n > 74.4 && n < 76.5) for (let k = 0; k < 3; k++) ringWave(f, Ps(X[k]), at(74.5, 0.55), { R: 110, w: 4, color: PAIR[k] });
+  // Pascal for free (flat)
+  if (ok && n > 207.95 && n < 210) for (let k = 0; k < 3; k++) ringWave(f, Ps(X[k]), at(208, 0.7), { R: 110, w: 3.5, color: PAIR[k] });
+  // 降维打击 2.0: the figure lands, the red line on the floor
+  if (ok && n > 255.95 && n < 259) {
+    const span = G.spanOf(X, 0), m = Ps(G.lerp2(span[0], span[1], 0.5));
+    ringWave(f, m, at(256, 0.9), { R: 260, w: 5, color: PAL.cream });
+    ringWave(f, m, at(256.25, 1.1), { R: 400, w: 3.5, color: PAL.red });
+    for (let k = 0; k < 3; k++) ringWave(f, Ps(X[k]), at(256.05, 0.7), { R: 100, w: 3.5, color: PAIR[k] });
+  }
 }
 
 // ------------------------------------------------------------------ texts
@@ -419,7 +426,7 @@ add({ n0: 6.0, n1: 8.0, s: '六边形有[3组对边]', size: 100, y: TY, ent: 'p
 add({ n0: 6.35, n1: 9.05, s: '面对面的两条边 · 同色为一组', font: 'WK', size: 56, y: CY, ent: 'pop' });
 add({ n0: 8.0, n1: 11.2, s: '把每组对边[延长]', size: 100, y: TY, ent: 'pop' });
 add({ n0: 9.1, n1: 11.95, s: '每组都交出1个点', font: 'WK', size: 58, y: CY, ent: 'pop' });
-add({ n0: 11.2, n1: 12.0, s: '这3个交点……', size: 100, y: TY, ent: 'pop' });
+add({ n0: 11.15, n1: 12.0, s: '这3个交点 · 有什么关系？', size: 92, y: TY, ent: 'pop', q: true, st: 0.012 });
 add({ n0: 12.0, n1: 16.0, s: '竟然在[一条直线]上！', size: 108, y: TY, ent: 'slam', hl: PAL.red });
 add({ n0: 13.0, n1: 16.0, s: '随便拖 · 永远共线', font: 'WK', size: 62, y: CY, ent: 'pop' });
 add({ n0: 16.0, n1: 20.0, s: '[帕斯卡]定理', size: 112, y: TY, ent: 'draw', hl: PAL.gold });
@@ -432,9 +439,9 @@ add({ n0: 24.0, n1: 28.0, s: '6条切线 · 围成新的六边形', size: 92, y:
 add({ n0: 25.0, n1: 28.0, s: '它把圆包在里面 · 叫「外切六边形」', font: 'WK', size: 54, y: CY, ent: 'pop' });
 add({ n0: 28.0, n1: 31.2, s: '把[交点]换成[连线]', size: 104, y: TY, ent: 'pop', hl: PAL.ice });
 add({ n0: 28.3, n1: 31.95, s: '交点 → 连接两个相对顶点的「对角线」', font: 'WK', size: 52, y: CY, ent: 'pop' });
-add({ n0: 31.2, n1: 32.0, s: '这3条对角线……', size: 100, y: TY, ent: 'pop' });
+add({ n0: 31.05, n1: 32.0, s: '这3条对角线 · 又会怎样？', size: 92, y: TY, ent: 'pop', q: true, st: 0.012 });
 add({ n0: 32.0, n1: 36.0, s: '竟然[交于一点]！', size: 108, y: TY, ent: 'slam', hl: PAL.red });
-add({ n0: 32.3, n1: 36.0, s: '红线 → 红点 · 共线 → 共点', font: 'SM', size: 52, y: TY2 + 8, ent: 'pop', fill: PAL.cream });
+add({ n0: 32.3, n1: 36.0, s: '红线 → 红点 · 共线 → 共点', font: 'SM', size: 52, y: TY2 + 8, ent: 'pop', fill: PAL.cream, st: 0.012 });
 add({ n0: 32.9, n1: 36.0, s: '随便拖 · 永远共点', font: 'WK', size: 62, y: CY, ent: 'pop' });
 add({ n0: 36.0, n1: 40.0, s: '[布列安桑]定理', size: 112, y: TY, ent: 'draw', hl: PAL.ice });
 add({ n0: 36.6, n1: 40.0, s: '1806年 · 他还是个大学生', font: 'SM', size: 52, y: TY2 + 8, ent: 'pop', fill: PAL.ice });
@@ -445,49 +452,144 @@ add({ n0: 40.4, n1: 44.0, s: '数学家叫它「对偶」', font: 'SM', size: 54
 const DROW = [[40.8, '点', '线'], [41.6, '交点', '连线'], [42.4, '共线', '共点']];
 add({ n0: 44.0, n1: 48.0, s: '可是 · [凭什么]？', size: 108, y: TY, ent: 'pop', hl: PAL.red });
 add({ n0: 44.6, n1: 48.0, s: '3条对角线 · 凭什么一定交于一点？', font: 'SM', size: 50, y: TY2 + 12, ent: 'pop', fill: PAL.cream });
-// ④ the 3-D proof, five numbered steps
-add({ n0: 48.0, n1: 50.0, s: '升到[三维]！', size: 128, y: TY, ent: 'slam', hl: PAL.gold });
-add({ n0: 48.4, n1: 50.0, s: '平面里难证 · 到空间里一眼看穿', font: 'SM', size: 52, y: TY2 + 30, ent: 'pop', fill: PAL.cream });
-add({ n0: 50.0, n1: 52.0, s: '6条边 · 一上一下翘起来', font: 'SM', size: 68, y: TY, ent: 'pop' });
-add({ n0: 52.0, n1: 54.0, s: '相邻两边 · 照样相交', font: 'SM', size: 68, y: TY, ent: 'pop' });
-add({ n0: 52.3, n1: 54.0, s: '同一顶点的两段切线一样长 → 翘起来一样高', font: 'WK', size: 48, y: CY, ent: 'pop' });
-add({ n0: 54.0, n1: 56.0, s: '全都躺在一张「小蛮腰」曲面上', font: 'SM', size: 64, y: TY, ent: 'pop' });
-add({ n0: 54.4, n1: 56.0, s: '广州塔就是这个形状 · 叫单叶双曲面', font: 'WK', size: 46, y: TY2 - 6, ent: 'pop', fill: PAL.ice });
-add({ n0: 56.0, n1: 58.0, s: '连出3条[空间对角线]', size: 92, y: TY, ent: 'pop', hl: PAL.gold });
-add({ n0: 58.0, n1: 60.0, s: '每两条 · 都在同一个平面里', font: 'SM', size: 64, y: TY, ent: 'pop' });
-add({ n0: 58.3, n1: 60.0, s: '同一平面里的两条线（不平行）→ 一定相交', font: 'WK', size: 48, y: CY, ent: 'pop' });
-add({ n0: 60.0, n1: 64.0, s: '两两相交 · 又不共面', font: 'SM', size: 70, y: TY - 38, ent: 'pop' });
-add({ n0: 62.0, n1: 64.0, s: '⇒ 只能交于[同一点]！', size: 92, y: TY + 84, ent: 'slam', hl: PAL.red });
-add({ n0: 62.4, n1: 64.0, s: '（否则3个交点围成三角形 · 3条线就共面了）', font: 'WK', size: 44, y: CY, ent: 'pop' });
-add({ n0: 64.0, n1: 68.0, s: '从正上方打光 · 看[影子]', size: 96, y: TY, ent: 'pop', hl: PAL.gold });
-add({ n0: 65.5, n1: 68.0, s: '空间里交于一点 → 影子也交于一点', font: 'WK', size: 50, y: CY, ent: 'pop' });
-// ⑤ the slam, dual back, end card
-add({ n0: 68.0, n1: 72.0, s: '[降维打击]！', size: 150, y: TY + 10, ent: 'slam', hl: PAL.red, big: 3.2 });
-add({ n0: 69.6, n1: 72.0, s: '布列安桑定理 · 证毕 ■', font: 'SM', size: 58, y: TY2 + 46, ent: 'pop', fill: PAL.ice });
-add({ n0: 72.0, n1: 74.5, s: '再[对偶]回去', size: 104, y: TY, ent: 'pop', hl: PAL.gold });
-add({ n0: 72.5, n1: 74.6, s: '线 → 点 · 共点 → 共线', font: 'WK', size: 58, y: CY, ent: 'pop' });
-add({ n0: 74.5, n1: 76.5, s: '[帕斯卡定理]也成立！', size: 100, y: TY, ent: 'slam', hl: PAL.red });
-add({ n0: 74.85, n1: 78.3, s: '一个证明 · 白送一个定理', font: 'WK', size: 58, y: CY, ent: 'pop', fill: PAL.gold });
-add({ n0: 76.5, n1: 99, s: '帕斯卡 ⇄ 布列安桑', size: 96, y: TY, ent: 'draw', hl: PAL.gold });
-add({ n0: 77.1, n1: 99, s: '点和线 · 互为[镜像]', font: 'SM', size: 70, y: 1300, ent: 'pop', hl: PAL.gold });
-add({ n0: 77.7, n1: 99, s: '几何定理系列 · 01', font: 'SM', size: 44, y: 1410, ent: 'pop', fill: PAL.goldD });
-add({ n0: 78.3, n1: 99, s: '你还见过哪些「对偶」？评论区聊', font: 'WK', size: 52, y: CY, ent: 'pop', fill: PAL.cream });
+// ④ Act II — Brianchon proved in space, five steps
+add({ n0: 48.0, n1: 52.0, s: '升到[三维]！', size: 128, y: TY, ent: 'slam', hl: PAL.gold });
+add({ n0: 48.4, n1: 52.0, s: '平面里难证 · 到空间里一眼看穿', font: 'SM', size: 52, y: TY2 + 30, ent: 'pop', fill: PAL.cream });
+add({ n0: 52.0, n1: 55.4, s: '6条边 · 一上一下[翘起来]', font: 'SM', size: 70, y: TY, ent: 'pop' });
+add({ n0: 52.5, n1: 55.4, s: '每条边绕着切点转 · 像跷跷板', font: 'WK', size: 52, y: CY, ent: 'pop' });
+add({ n0: 55.4, n1: 60.0, s: '相邻两边 · 照样[相交]', font: 'SM', size: 72, y: TY, ent: 'pop' });
+add({ n0: 55.8, n1: 58.0, s: '看顶点4：两段切线一样长（影子上的记号）', font: 'WK', size: 48, y: CY, ent: 'pop' });
+add({ n0: 58.0, n1: 60.0, s: '→ 翘起来一样高 → 正好碰头', font: 'WK', size: 52, y: CY, ent: 'pop' });
+add({ n0: 60.0, n1: 64.0, s: '它们都在一个「[小蛮腰]」曲面上', font: 'SM', size: 66, y: TY, ent: 'pop' });
+add({ n0: 60.5, n1: 64.0, s: '广州塔就是这个形状 · 叫单叶双曲面', font: 'WK', size: 46, y: TY2 - 6, ent: 'pop', fill: PAL.ice });
+add({ n0: 64.0, n1: 67.0, s: '曲面由[直线]织成', size: 96, y: TY, ent: 'pop' });
+add({ n0: 64.3, n1: 67.0, s: '金色一族 · 蓝色一族', font: 'WK', size: 54, y: CY, ent: 'pop' });
+add({ n0: 67.0, n1: 72.0, s: '6条边：[金蓝交替]', size: 96, y: TY, ent: 'pop' });
+add({ n0: 67.5, n1: 72.0, s: '相对的两条边 · 一定是一金一蓝', font: 'WK', size: 52, y: CY, ent: 'pop' });
+add({ n0: 72.0, n1: 76.0, s: '连出3条[空间对角线]', size: 92, y: TY, ent: 'pop', hl: PAL.gold });
+add({ n0: 72.4, n1: 76.0, s: '14 · 25 · 36（连相对的顶点）', font: 'WK', size: 54, y: CY, ent: 'pop' });
+add({ n0: 76.0, n1: 80.0, s: '它们[两两相交]吗？', size: 96, y: TY, ent: 'pop', hl: PAL.red, q: true, st: 0.02 });
+add({ n0: 77.2, n1: 80.0, s: '空间里的两条直线 · 多半是错开的', font: 'WK', size: 52, y: CY, ent: 'pop' });
+add({ n0: 80.0, n1: 84.0, s: '先看 [25] 和 [36]', size: 100, y: TY, ent: 'pop' });
+add({ n0: 80.5, n1: 84.0, s: '想证它俩相交 · 先找一个装下它俩的平面', font: 'WK', size: 48, y: CY, ent: 'pop' });
+add({ n0: 84.0, n1: 88.0, s: '看4个端点：[2 3 5 6]', size: 88, y: TY, ent: 'pop' });
+add({ n0: 84.5, n1: 88.0, s: '2、3 在边23上 · 5、6 在边56上', font: 'WK', size: 50, y: TY2, ent: 'pop', fill: PAL.ice });
+add({ n0: 88.0, n1: 90.8, s: '把边23和边56 · [延长]', font: 'SM', size: 74, y: TY, ent: 'pop', st: 0.025 });
+add({ n0: 88.2, n1: 89.6, s: '空间里的两条线 · 会碰上吗？', font: 'WK', size: 56, y: CY, ent: 'pop', q: true, st: 0.012 });
+add({ n0: 89.6, n1: 91.6, s: '真的碰上了！交于一点 P', font: 'WK', size: 56, y: CY, ent: 'pop', fill: PAL.gold, st: 0.02 });
+add({ n0: 90.8, n1: 93.4, s: '为什么？看[影子]', size: 100, y: TY, ent: 'pop' });
+add({ n0: 91.8, n1: 93.4, s: '影子：两条切线交于一点 · 到切点一样远', font: 'WK', size: 50, y: CY, ent: 'pop', st: 0.02 });
+add({ n0: 93.4, n1: 96.0, s: '一样远 → 升得[一样高]', size: 90, y: TY, ent: 'pop' });
+add({ n0: 93.8, n1: 96.0, s: '所以在影子正上方碰头', font: 'WK', size: 54, y: CY, ent: 'pop' });
+add({ n0: 96.0, n1: 100.0, s: '两条相交直线 → 定出[一个平面]', font: 'SM', size: 70, y: TY, ent: 'pop' });
+add({ n0: 100.0, n1: 102.4, s: '2、3、5、6 都在这个平面上', font: 'SM', size: 70, y: TY, ent: 'pop' });
+add({ n0: 100.4, n1: 102.4, s: '→ 对角线25、36也在这个平面上', font: 'WK', size: 52, y: CY, ent: 'pop' });
+add({ n0: 102.4, n1: 106.0, s: '同一平面 · 不平行 → [一定相交]！', font: 'SM', size: 66, y: TY, ent: 'pop' });
+add({ n0: 106.0, n1: 110.0, s: '再看 [36] 和 [14]', size: 100, y: TY, ent: 'pop' });
+add({ n0: 106.4, n1: 110.0, s: '边34、边61延长 → 相交 → 同一平面 → 相交', font: 'WK', size: 46, y: CY, ent: 'pop' });
+add({ n0: 110.0, n1: 114.0, s: '最后 [14] 和 [25]', size: 100, y: TY, ent: 'pop' });
+add({ n0: 110.4, n1: 114.0, s: '边12、边45延长 → 相交（交点在很高处）→ 相交', font: 'WK', size: 44, y: CY, ent: 'pop' });
+add({ n0: 114.0, n1: 118.0, s: '3条线 · [两两相交]', size: 96, y: TY, ent: 'pop' });
+add({ n0: 114.4, n1: 118.0, s: '交点只有两种可能', font: 'SM', size: 52, y: TY2, ent: 'pop', fill: PAL.cream });
+add({ n0: 115.9, n1: 118.0, s: '你觉得 · 会是哪一种？', font: 'WK', size: 58, y: CY, ent: 'pop', q: true, st: 0.02 });
+add({ n0: 118.0, n1: 121.0, s: '要是围成三角形 → 3条线[共面]', font: 'SM', size: 68, y: TY, ent: 'pop' });
+add({ n0: 118.4, n1: 121.0, s: '→ 6个顶点也都在这个平面上', font: 'WK', size: 52, y: CY, ent: 'pop' });
+add({ n0: 121.0, n1: 124.0, s: '可6个顶点[一上一下]！', size: 92, y: TY, ent: 'pop' });
+add({ n0: 121.4, n1: 122.65, s: '相邻顶点 · 一个在腰上方 · 一个在腰下方', font: 'WK', size: 48, y: CY, ent: 'pop', st: 0.02 });
+// the ④ insert (video beats 123–127; the story clock waits at 123): why six alternating vertices cannot share a plane
+add({ v: true, n0: 123.0, n1: 125.05, s: '假如共面：它和腰面交成一条线 · 一边高 一边低', font: 'WK', size: 46, y: CY, ent: 'pop', st: 0.02 });
+add({ v: true, n0: 125.25, n1: 126.75, s: '可「上」「下」交替 · 哪条线都分不开！', font: 'WK', size: 52, y: CY, ent: 'pop', fill: PAL.cream, st: 0.02 });
+add({ n0: 124.0, n1: 128.0, s: '⇒ 只能交于[同一点]！', size: 100, y: TY, ent: 'slam', hl: PAL.red });
+add({ n0: 124.4, n1: 128.0, s: '3条空间对角线 · 交于一点 Q', font: 'SM', size: 52, y: TY2 + 10, ent: 'pop', fill: PAL.cream, st: 0.015 });
+add({ n0: 128.0, n1: 132.0, s: '从正上方打光 · 看[影子]', size: 92, y: TY, ent: 'pop', hl: PAL.gold });
+add({ n0: 128.4, n1: 132.0, s: '光线垂直向下 · 每个点落在正下方', font: 'WK', size: 52, y: CY, ent: 'pop' });
+add({ n0: 132.0, n1: 136.0, s: '影子 = 原来的[平面图形]！', size: 88, y: TY, ent: 'pop', hl: PAL.ice });
+add({ n0: 132.4, n1: 136.0, s: '6条边 → 外切六边形 · 空间对角线 → 平面对角线', font: 'WK', size: 46, y: CY, ent: 'pop' });
+add({ n0: 136.0, n1: 140.0, s: '空间里交于一点 → 影子也[交于一点]', font: 'SM', size: 64, y: TY, ent: 'pop', hl: PAL.red });
+add({ n0: 136.4, n1: 140.0, s: 'Q 的影子 = 布列安桑点', font: 'WK', size: 56, y: CY, ent: 'pop' });
+add({ n0: 140.0, n1: 144.0, s: '[降维打击]！', size: 150, y: TY + 10, ent: 'slam', hl: PAL.red, big: 1.5 });
+add({ n0: 140.6, n1: 144.0, s: '布列安桑定理 · 证毕 ■', font: 'SM', size: 58, y: TY2 + 46, ent: 'pop', fill: PAL.ice });
+// ⑤ Act III — why duality works: a point's line (pole / polar)
+add({ n0: 144.0, n1: 148.0, s: '可是 · [对偶]凭什么成立？', size: 88, y: TY, ent: 'pop', hl: PAL.gold });
+add({ n0: 144.5, n1: 148.0, s: '点 · 凭什么能变成线？', font: 'SM', size: 54, y: TY2 + 8, ent: 'pop', fill: PAL.cream });
+add({ n0: 148.0, n1: 152.0, s: '圆外一点 P · 引[两条切线]', font: 'SM', size: 72, y: TY, ent: 'pop' });
+add({ n0: 152.0, n1: 156.0, s: '连起两个[切点]', size: 96, y: TY, ent: 'pop' });
+add({ n0: 152.5, n1: 156.0, s: '得到一条线（切点弦）', font: 'WK', size: 54, y: CY, ent: 'pop' });
+add({ n0: 156.0, n1: 160.0, s: '这条线 · 就是 P 的「[线]」', font: 'SM', size: 74, y: TY, ent: 'pop' });
+add({ n0: 156.5, n1: 160.0, s: '数学家叫它 P 的「极线」', font: 'SM', size: 50, y: TY2, ent: 'pop', fill: PAL.ice });
+add({ n0: 160.0, n1: 164.0, s: 'P 往圆上走……', size: 96, y: TY, ent: 'pop' });
+add({ n0: 160.5, n1: 164.0, s: '它的线也跟着往外走', font: 'SM', size: 50, y: TY2, ent: 'pop', fill: PAL.ice });
+add({ n0: 161.6, n1: 164.0, s: '走到圆上时 · 它的线会变成什么？', font: 'WK', size: 54, y: CY, ent: 'pop', q: true, st: 0.02 });
+add({ n0: 164.0, n1: 168.0, s: 'P 在圆上 → 它的线 = [切线]！', font: 'SM', size: 70, y: TY, ent: 'pop' });
+add({ n0: 164.5, n1: 168.0, s: '第一幕「点 → 切线」· 就是这个！', font: 'WK', size: 52, y: CY, ent: 'pop', fill: PAL.gold });
+add({ n0: 168.0, n1: 172.0, s: '用[坐标]说清楚', size: 96, y: TY, ent: 'pop' });
+add({ n0: 172.0, n1: 176.0, s: '课本里的「[切点弦方程]」', font: 'SM', size: 72, y: TY, ent: 'pop' });
+add({ n0: 172.5, n1: 176.0, s: 'P 在圆上时 · 它正是切线方程', font: 'WK', size: 52, y: CY, ent: 'pop' });
+add({ n0: 176.0, n1: 180.0, s: 'Q(c, d) 在 P 的线上', font: 'SM', size: 80, y: TY, ent: 'pop' });
+add({ n0: 178.6, n1: 180.0, s: '反过来 · P 在 Q 的线上吗？', font: 'WK', size: 56, y: CY, ent: 'pop', q: true, st: 0.02 });
+add({ n0: 180.0, n1: 184.0, s: '换个角度读：P 在 Q 的线上！', font: 'SM', size: 70, y: TY, ent: 'pop' });
+add({ n0: 180.6, n1: 184.0, s: '两个式子 · 一模一样', font: 'WK', size: 54, y: CY, ent: 'pop', fill: PAL.gold });
+add({ n0: 184.0, n1: 188.0, s: '你在我的线上 ⇔ [我在你的线上]', size: 80, y: TY, ent: 'slam', hl: PAL.red });
+add({ n0: 184.4, n1: 188.0, s: '对偶的秘密 · 就这一句', font: 'SM', size: 54, y: TY2 + 20, ent: 'pop', fill: PAL.gold });
+add({ n0: 188.0, n1: 192.0, s: 'Q 沿着 P 的线滑动……', font: 'SM', size: 74, y: TY, ent: 'pop' });
+add({ n0: 188.5, n1: 192.0, s: 'Q 的线 · 始终绕着 P 转', font: 'WK', size: 54, y: CY, ent: 'pop' });
+add({ n0: 192.0, n1: 196.0, s: '点在一条[线]上 ⇔ 线过同一个[点]', font: 'SM', size: 66, y: TY, ent: 'pop' });
+add({ n0: 192.5, n1: 196.0, s: '共线 ⇔ 共点', size: 72, y: TY2 + 24, ent: 'pop', fill: PAL.gold });
+add({ n0: 196.0, n1: 200.0, s: '回到六边形：顶点 → [一条边]', font: 'SM', size: 68, y: TY, ent: 'pop' });
+add({ n0: 196.5, n1: 200.0, s: '从顶点引的两条切线 · 切点连起来 = 内接六边形的边', font: 'WK', size: 44, y: CY, ent: 'pop' });
+add({ n0: 200.0, n1: 204.0, s: '对角线 → 一组[对边的交点]', font: 'SM', size: 70, y: TY, ent: 'pop' });
+add({ n0: 200.5, n1: 204.0, s: '对角线过两个顶点 ⇔ 那两条对边过这个交点', font: 'WK', size: 46, y: CY, ent: 'pop' });
+add({ n0: 204.0, n1: 208.0, s: '3条对角线交于 [B]', size: 92, y: TY, ent: 'pop', hl: PAL.red });
+add({ n0: 204.5, n1: 208.0, s: '⇔ 3个交点都在 B 的线上', font: 'SM', size: 54, y: TY2 + 8, ent: 'pop', fill: PAL.cream });
+add({ n0: 208.0, n1: 212.0, s: '[帕斯卡定理]也成立！', size: 100, y: TY, ent: 'slam', hl: PAL.red });
+add({ n0: 208.5, n1: 212.0, s: '布列安桑 ⇒ 帕斯卡 · 对偶白送一个定理', font: 'WK', size: 54, y: CY, ent: 'pop', fill: PAL.gold, st: 0.02 });
+// ⑥ Act IV — Pascal lifted too (Dandelin 1826)
+add({ n0: 212.0, n1: 216.0, s: '其实帕斯卡 · 也能[升维]', size: 90, y: TY, ent: 'pop', hl: PAL.gold });
+add({ n0: 212.5, n1: 216.0, s: 'Dandelin 1826 · 同一座小蛮腰', font: 'SM', size: 50, y: TY2 + 8, ent: 'pop', fill: PAL.ice });
+add({ n0: 216.0, n1: 220.0, s: '同样的6条边 · 穿过6个[切点]', font: 'SM', size: 70, y: TY, ent: 'pop' });
+add({ n0: 216.5, n1: 220.0, s: '6个切点连起来 = 帕斯卡的六边形（在腰上）', font: 'WK', size: 48, y: CY, ent: 'pop', fill: PAL.gold });
+add({ n0: 220.0, n1: 224.0, s: '相邻两条边 → 张成一个[三角面]', font: 'SM', size: 70, y: TY, ent: 'pop' });
+add({ n0: 220.5, n1: 224.0, s: '它和腰平面的交线 = 金色六边形的一条边', font: 'WK', size: 48, y: CY, ent: 'pop' });
+add({ n0: 224.0, n1: 228.0, s: '6个三角面 ↔ 金色六边形的6条边', font: 'SM', size: 66, y: TY, ent: 'pop' });
+add({ n0: 228.0, n1: 232.0, s: '对边交于[3个点]', size: 96, y: TY, ent: 'pop' });
+add({ n0: 228.5, n1: 232.0, s: '第二幕证过：相对的两条边一定相交', font: 'WK', size: 50, y: CY, ent: 'pop' });
+add({ n0: 232.0, n1: 234.0, s: '3个点 → 定出一个[平面]', font: 'SM', size: 74, y: TY, ent: 'pop' });
+add({ n0: 234.0, n1: 238.0, s: '看这条棱：它同时在[两个三角面]上', font: 'SM', size: 64, y: TY, ent: 'pop' });
+add({ n0: 234.5, n1: 238.0, s: '棱的两端 = 两组对边的交点', font: 'WK', size: 52, y: CY, ent: 'pop' });
+add({ n0: 238.0, n1: 242.0, s: '两个三角面 · 和腰平面交出一组[对边]', font: 'SM', size: 64, y: TY, ent: 'pop' });
+add({ n0: 239.6, n1: 242.0, s: '那么 · 棱穿过腰平面的点在哪？', font: 'WK', size: 54, y: CY, ent: 'pop', q: true, st: 0.02 });
+add({ n0: 242.0, n1: 245.0, s: '棱穿过腰平面的点 = [对边交点]！', font: 'SM', size: 66, y: TY, ent: 'pop' });
+add({ n0: 242.4, n1: 245.0, s: '它同时在两条对边的延长线上', font: 'WK', size: 52, y: CY, ent: 'pop' });
+add({ n0: 245.0, n1: 249.0, s: '另外两条棱 · [同理]', size: 92, y: TY, ent: 'pop' });
+add({ n0: 249.0, n1: 253.0, s: '3个交点：既在[三角形平面]上', font: 'SM', size: 70, y: TY, ent: 'pop' });
+add({ n0: 249.5, n1: 253.0, s: '又在腰平面上', font: 'SM', size: 58, y: TY2 + 8, ent: 'pop', fill: PAL.ice });
+add({ n0: 250.6, n1: 253.0, s: '两个平面相交 · 会交出什么？', font: 'WK', size: 56, y: CY, ent: 'pop', q: true, st: 0.02 });
+add({ n0: 253.0, n1: 256.0, s: '两个平面相交 → [一条直线]！', font: 'SM', size: 72, y: TY, ent: 'pop', hl: PAL.red });
+add({ n0: 256.0, n1: 260.0, s: '[降维打击] 2.0！', size: 140, y: TY + 10, ent: 'slam', hl: PAL.red, big: 1.5 });
+add({ n0: 256.6, n1: 260.0, s: '三点共线 · 帕斯卡定理 证毕 ■', font: 'SM', size: 56, y: TY2 + 46, ent: 'pop', fill: PAL.gold });
+// ⑦ outro
+add({ n0: 260.0, n1: 264.0, s: '一座[小蛮腰] · 两个定理', size: 92, y: TY, ent: 'pop', hl: PAL.ice });
+add({ n0: 264.0, n1: 999, s: '帕斯卡 ⇄ 布列安桑', size: 96, y: TY, ent: 'draw', hl: PAL.gold });
+add({ n0: 264.6, n1: 999, s: '点和线 · 互为[镜像]', font: 'SM', size: 70, y: 1300, ent: 'pop', hl: PAL.gold });
+add({ n0: 265.2, n1: 999, s: '几何定理系列 · 01', font: 'SM', size: 44, y: 1410, ent: 'pop', fill: PAL.goldD });
+add({ n0: 265.8, n1: 999, s: '你还见过哪些「对偶」？评论区聊', font: 'WK', size: 52, y: CY, ent: 'pop', fill: PAL.cream });
 
 // a line leaves just before the next line that lands in the same place
 let SLOTTED = false;
 function slotTexts() {
   for (const o of T) {
     for (const q of T) {
-      if (q === o || q.n0 <= o.n0 + 1e-6) continue;
+      if (q === o || !!q.v !== !!o.v || q.n0 <= o.n0 + 1e-6) continue;
       if (Math.abs((q.y ?? 0) - (o.y ?? 0)) < 0.55 * Math.max(q.size, o.size)) o.n1 = Math.min(o.n1, q.n0 - 0.2);
     }
   }
   SLOTTED = true;
 }
-// 3-D proof progress: ①②③④⑤ at the top
-const STEPS = [50, 54, 56, 60, 64];
+// 3-D proof progress: ①②③④⑤ at the top (Act II and Act IV)
+const STEPS2 = [52, 60, 72, 114, 128], STEPS4 = [216, 220, 228, 234, 249];
 function drawSteps(f, t, n) {
-  const a = ramp(49.6, 50.2, n) * (1 - ramp(67.6, 68.0, n));
+  const II = n < 200, STEPS = II ? STEPS2 : STEPS4;
+  const a = II ? ramp(49.6, 50.2, n) * (1 - ramp(139.6, 140.0, n)) : ramp(213.0, 213.6, n) * (1 - ramp(255.6, 256.0, n));
   if (a <= 0.003) return;
   let cur = -1; STEPS.forEach((n0, i) => { if (n >= n0) cur = i; });
   const y = 128, dx = 96;
@@ -502,29 +604,157 @@ function drawSteps(f, t, n) {
     f.beginPath(); f.arc(x, y, r, 0, Math.PI * 2);
     if (on || done) { f.fillStyle = on ? PAL.gold : rgba(PAL.goldD, 0.75); f.fill(); }
     f.lineWidth = 3; f.strokeStyle = on ? PAL.cream : rgba(PAL.goldD, 0.9); f.stroke();
-    letters(f, String(i + 1), { font: 'SM', size: on ? 30 + 8 * pop : 28, x, y: y + 1, fill: on || done ? '#0B1320' : PAL.goldD, knock: 0, amp: 0.25, D: Math.floor(t * FPS / 2), seed: 90 + i });
+    letters(f, String(i + 1), { font: 'SM', size: on ? 30 + 8 * pop : 28, x, y: y + 1, fill: on || done ? '#0B1320' : PAL.goldD, knock: 0, amp: 0.25, D: bD(t), seed: 90 + i });
   }
   f.restore();
+}
+function rrect(f, x0, y0, x1, y1, r) {
+  f.beginPath(); f.moveTo(x0 + r, y0); f.arcTo(x1, y0, x1, y1, r); f.arcTo(x1, y1, x0, y1, r); f.arcTo(x0, y1, x0, y0, r); f.arcTo(x0, y0, x1, y0, r); f.closePath();
+}
+// a card that pops in (scale about its centre) and drops out
+function cardAnim(t, n, n0, n1) {
+  if (n < n0) return null;
+  const pin = E.outBack(clamp((t - bt(n0)) / 0.3), 2.2), pout = clamp((t - bt(n1)) / 0.25);
+  if (pout >= 1) return null;
+  return { s: 0.6 + 0.4 * pin, a: clamp(pin * 1.4) * (1 - pout), dy: 26 * E.in2(pout) };
+}
+// Act II ④: the two possibilities for three pairwise-meeting lines (交于一点 / 围成三角形)
+function drawPicto(f, t, n) {
+  if (n < 114.5 || n > 126.6) return;
+  const D = bD(t), cy = 548, hw = 205, hh = 112;
+  const opts = [{ x: 300, n0: 114.7, lab: '交于一点' }, { x: 780, n0: 115.3, lab: '围成三角形' }];
+  opts.forEach((o, j) => {
+    const an = cardAnim(t, n, o.n0, 125.6);
+    if (!an) return;
+    const ko = j === 1 ? ramp(123.0, 123.3, n) : 0, win1 = j === 0 ? pulse(n, 124, 0.06, 1.6) : 0;
+    const hiTri = j === 1 ? ramp(118.1, 118.6, n) * (1 - ko) : 0;
+    f.save(); f.globalAlpha *= an.a * (1 - 0.45 * ko);
+    f.translate(o.x, cy + an.dy); f.scale(an.s, an.s);
+    rrect(f, -hw, -hh, hw, hh, 24); f.fillStyle = 'rgba(11,19,32,0.84)'; f.fill();
+    f.lineWidth = 2.5 + 2 * (hiTri + win1); f.strokeStyle = rgba(j === 0 && n > 124 ? PAL.gold : hiTri > 0.1 ? PAL.ice : PAL.goldD, 0.55 + 0.4 * Math.max(hiTri, win1, j === 0 && n > 124 ? 1 : 0)); f.stroke();
+    const c0 = [0, -26];
+    if (j === 0) {
+      for (let k = 0; k < 3; k++) {
+        const ang = (20 + 60 * k) * Math.PI / 180, dx = Math.cos(ang) * 92, dy = Math.sin(ang) * 66;
+        sline(f, [c0[0] - dx, c0[1] - dy], [c0[0] + dx, c0[1] + dy], { w: 4, color: PAIR[k], alpha: 1 });
+      }
+      sdot(f, c0, { r: 9, s: 1 + 0.4 * win1, color: PAL.red, core: '#FFFFFF', halo: 2 + 3 * win1, alpha: 1 });
+    } else {
+      const tri = [[-62, 18], [58, 22], [-4, -78]].map((p) => [p[0] + c0[0], p[1] + c0[1] + 10]);
+      if (hiTri > 0.003) { sfill(f, [[-150, 54], [140, 62], [120, -98], [-128, -104]], PAL.ice, 0.16 * hiTri); }
+      for (let k = 0; k < 3; k++) {
+        const a = tri[k], b = tri[(k + 1) % 3], d = G.nrm(G.sub(b, a));
+        sline(f, [a[0] - d[0] * 38, a[1] - d[1] * 38], [b[0] + d[0] * 38, b[1] + d[1] * 38], { w: 4, color: PAIR[k], alpha: 1 });
+      }
+      for (const p of tri) sdot(f, p, { r: 6.5, color: PAL.cream, alpha: 1 });
+      if (hiTri > 0.003) letters(f, '共面', { font: 'SM', size: 34, x: 128, y: -78, fill: PAL.ice, alpha: hiTri, D, seed: 31, amp: 0.3, knock: 0 });
+    }
+    letters(f, o.lab, { font: 'SM', size: 40, x: 0, y: 76, fill: j === 0 && n > 124 ? PAL.gold : PAL.cream, D, seed: 20 + j, amp: 0.35, knock: 0 });
+    f.restore();
+    // verdicts: ✗ on the triangle (123), ✓ on the single point (124)
+    if (j === 1 && n > 123.0) letters(f, '✗', { font: 'WK', size: 160, x: o.x, y: cy - 10 + an.dy, fill: PAL.red, alpha: an.a, anim: slamIn(t, bt(123.0), 0.26, { big: 1.3 }), D, seed: 33 });
+    if (j === 0 && n > 124.0) { const u = clamp((n - 124.0) / 0.3); check(f, [o.x + hw - 30, cy - hh + 22 + an.dy], 92 * (1 + 0.7 * (1 - E.out2(u))), { color: PAL.gold, alpha: an.a, u: clamp((n - 124.0) / 0.22) }); }
+  });
+}
+// Act II ③: checklist of the three pairs
+function drawChecks(f, t, n) {
+  if (n < 102.8 || n > 126.6) return;
+  const D = bD(t), y = 1488;
+  [[102.8, '25 和 36', 1], [108.9, '36 和 14', 2], [112.9, '14 和 25', 0]].forEach(([n0, s, k], j) => {
+    const an = cardAnim(t, n, n0, 125.6);
+    if (!an) return;
+    const x = 230 + 310 * j, col = mixHex(mixHex(PAIR[k], PAIR[(k + 1) % 3], 0.5), '#FFFFFF', 0.2);
+    f.save(); f.globalAlpha *= an.a; f.translate(x, y + an.dy); f.scale(an.s, an.s);
+    rrect(f, -132, -40, 132, 40, 20); f.fillStyle = 'rgba(11,19,32,0.84)'; f.fill(); f.lineWidth = 2.5; f.strokeStyle = rgba(col, 0.8); f.stroke();
+    letters(f, s, { font: 'SM', size: 40, x: -22, y: 1, fill: PAL.cream, D, seed: 50 + j, amp: 0.3, knock: 0 });
+    check(f, [94, 2], 40, { color: col, u: clamp((n - n0 - 0.15) / 0.35) });
+    f.restore();
+  });
+}
+// Act III: the formula card rows (the card itself is drawn with the figure)
+const CROWS = [[168.4, 1316, '圆：x² + y² = r²', PAL.cream], [169.6, 1382, 'P(a, b) 的线：[ax + by = r²]', '#FFE3A3'],
+  [176.6, 1450, 'Q 在 P 的线上：[a·c + b·d = r²]', PAL.c2], [180.6, 1512, 'P 在 Q 的线上：[c·a + d·b = r²]', PAL.c2]];
+function drawCardRows(f, t, n) {
+  if (n < 168.3 || n > 188.6) return;
+  const D = bD(t);
+  CROWS.forEach(([n0, y, s, hl], j) => {
+    if (n < n0) return;
+    const out = n >= 187.4 ? dropOut(t, bt(187.4), 0.2, { dist: 18 }) : null;
+    const same = j >= 2 ? pulse(n, 182.4, 0.12, 1.4) : 0;
+    let size = 46; const m = measure(s, 'WK', size); if (m.w > 860) size *= 860 / m.w;
+    letters(f, s, { font: 'WK', size: size * (1 + 0.08 * same), x: 540, y, fill: PAL.cream, hl, anim: out || popIn(t, bt(n0), 0.03, 0.24), D, seed: 70 + j, amp: 0.7 });
+  });
+}
+// ---- questions to the viewer (v3 calm): the ring of the "？" badge fills during the think-time hold
+const TAU = Math.PI * 2, vbeat = (n) => (n < S.INS0 ? n : n + S.INSD);
+function qRing(o) {
+  if (o._h === undefined) {
+    const a = o.v ? o.n0 : vbeat(o.n0), b = o.v ? o.n1 : vbeat(o.n1);
+    o._h = S.HOLDS.findIndex((h) => h[3] === 'q' && h[0] > a && h[0] < b);
+  }
+  if (o._h < 0) return 0;
+  const [ta, tb] = S.holdSpan(o._h);
+  return clamp((RT - ta) / (tb - ta));
+}
+function qBadge(f, x, y, r, a, u, D) {
+  f.save(); f.globalAlpha *= a;
+  f.beginPath(); f.arc(x, y, r + 7, 0, TAU); f.fillStyle = 'rgba(11,19,32,0.9)'; f.fill();
+  f.beginPath(); f.arc(x, y, r - 3, 0, TAU); f.fillStyle = rgba(PAL.gold, 0.12); f.fill();
+  f.lineWidth = 5; f.strokeStyle = rgba(PAL.gold, 0.38); f.beginPath(); f.arc(x, y, r, 0, TAU); f.stroke();
+  if (u > 0.002) { f.lineCap = 'round'; f.lineWidth = 7; f.strokeStyle = PAL.gold; f.beginPath(); f.arc(x, y, r, -Math.PI / 2, -Math.PI / 2 + TAU * u); f.stroke(); }
+  f.restore();
+  letters(f, '?', { font: 'SB', size: 1.5 * r, x, y: y + 0.02 * r, fill: PAL.gold, alpha: a, D, seed: 97, amp: 0.3, knock: 0 });
+}
+// ---- hard parts (v3 calm): a quiet pill — 这里有点绕 · 可以先暂停 (video beats)
+const PAUSES = [[90.9, 95.4], [123.05, 125.6], [168.3 + 4, 172.6 + 4], [234.2 + 4, 238.4 + 4]];
+const PAUSE_TXT = '这里有点绕 · 可以先暂停，慢慢看';
+function drawPauseHint(f, n) {
+  const nv = NV;
+  for (const [a, b] of PAUSES) {
+    const al = ramp(a, a + 0.5, nv) * (1 - ramp(b - 0.5, b, nv));
+    if (al <= 0.003) continue;
+    const size = 36, w = measure(PAUSE_TXT, 'SM', size).w, x0 = 540 - (w + 66) / 2, y = 1712;
+    f.save(); f.globalAlpha *= al * 0.92;
+    rrect(f, x0 - 26, y - 34, x0 + w + 92, y + 34, 34); f.fillStyle = 'rgba(11,19,32,0.84)'; f.fill();
+    f.lineWidth = 2; f.strokeStyle = rgba(PAL.goldD, 0.7); f.stroke();
+    f.fillStyle = PAL.gold;
+    rrect(f, x0 + 6, y - 15, x0 + 16, y + 15, 3); f.fill();
+    rrect(f, x0 + 25, y - 15, x0 + 35, y + 15, 3); f.fill();
+    f.restore();
+    letters(f, PAUSE_TXT, { font: 'SM', size, x: x0 + 66 + w / 2, y: y + 1, fill: PAL.cream, alpha: al * 0.92, D: bD(0), seed: 98, amp: 0.25, knock: 0 });
+  }
 }
 function drawTexts(f, t, n) {
   if (!SLOTTED) slotTexts();
   drawSteps(f, t, n);
+  drawPicto(f, t, n);
+  drawChecks(f, t, n);
+  drawCardRows(f, t, n);
+  const tS = t, nS = n;
   for (let j = 0; j < T.length; j++) {
-    const o = T[j];
+    const o = T[j], t = o.v ? TV : tS, n = o.v ? NV : nS;   // v-captions run on the video clock (④ insert)
     const exitD = 0.32;
     if (n < o.n0 - 0.001 || n > o.n1 + exitD) continue;
     const t0 = bt(o.n0), t1 = bt(o.n1);
     const font = o.font || 'SB';
     let size = o.size;
-    const m = measure(o.s, font, size);
-    if (m.w > 960) size *= 960 / m.w;
+    const m = measure(o.s, font, size), maxW = o.q ? 860 : 960;
+    if (m.w > maxW) size *= maxW / m.w;
+    let tx = o.x ?? 540;
+    if (o.q) {   // a question to the viewer: a "？" badge on the left whose ring fills during the think-time hold
+      const w = Math.min(m.w, maxW), r = clamp(0.5 * size, 28, 38), gap = 22, tot = 2 * r + gap + w;
+      tx = 540 - tot / 2 + 2 * r + gap + w / 2;
+      const a = clamp((t - t0) / 0.3) * (1 - clamp((t - t1) / 0.13));
+      if (a > 0.003) qBadge(f, 540 - tot / 2 + r, o.y, r, a, qRing(o), bD(t));
+    }
     let anim, draw;
     if (t >= t1) anim = dropOut(t, t1, 0.13, { dist: 22, st: 0.008 });
-    else if (o.ent === 'slam') anim = slamIn(t, t0, 0.2, { big: o.big ?? 2.3 });
+    else if (o.ent === 'slam') anim = slamIn(t, t0, 0.3, { big: o.big ?? 1.3 });   // v3 calm: a gentle landing
     else if (o.ent === 'draw') { draw = clamp((t - t0) / 0.75); anim = null; }
-    else anim = popIn(t, t0, 0.035, 0.24, { rot: 0.14 });
-    letters(f, o.s, { font, size, x: o.x ?? 540, y: o.y, fill: o.fill ?? PAL.cream, hl: o.hl ?? PAL.gold, anim, draw, D: Math.floor(t * FPS / 2), seed: j + 1, amp: font === 'WK' ? 0.9 : 0.45 });
+    else anim = popIn(t, t0, o.st ?? 0.035, 0.24, { rot: 0.14 });
+    letters(f, o.s, { font, size, x: tx, y: o.y, fill: o.fill ?? PAL.cream, hl: o.hl ?? PAL.gold, anim, draw, D: bD(t), seed: j + 1, amp: font === 'WK' ? 0.9 : 0.45 });
   }
+  drawPauseHint(f, nS);
   // duality dictionary (twins bar)
   if (n >= 40.7 && n < 44.4) {
     DROW.forEach(([n0, a, b], r) => {
@@ -540,7 +770,7 @@ function drawTexts(f, t, n) {
 }
 
 // ------------------------------------------------------------------ bloom + post
-function bloomAt(n) { return 0.9 + 0.8 * pulse(n, 12, 0.04, 1) + 0.9 * pulse(n, 32, 0.04, 1.4) + 1.4 * pulse(n, 68, 0.03, 2) + 0.6 * pulse(n, 74.5, 0.04, 1); }
+function bloomAt(n) { return 0.9 + 0.3 * pulse(n, 12, 0.06, 1.2) + 0.35 * pulse(n, 32, 0.06, 1.4) + 0.1 * pulse(n, 48, 0.06, 1) + 0.3 * pulse(n, 124, 0.06, 1.2) + 0.55 * pulse(n, 140, 0.06, 2) + 0.2 * pulse(n, 184, 0.06, 1) + 0.3 * pulse(n, 208, 0.06, 1.2) + 0.55 * pulse(n, 256, 0.06, 2); }
 function composite(fg, n) {
   const src = fg.canvas;
   const b1 = IMG.b1.getContext('2d'), b2 = IMG.b2.getContext('2d');
@@ -557,28 +787,32 @@ function composite(fg, n) {
   c.drawImage(src, 0, 0);
   c.restore();
 }
-function post(t, n) {
+function post(t, n, tv) {
   c.save(); c.setTransform(dpr, 0, 0, dpr, 0, 0);
   // flashes
-  const fl = 0.1 * pulse(n, 12, 0.02, 0.3) + 0.25 * pulse(n, 32, 0.02, 0.4) + 0.75 * pulse(n, 68, 0.015, 0.55) + 0.18 * pulse(n, 74.5, 0.02, 0.35);
+  const fl = 0.02 * pulse(n, 12, 0.04, 0.5) + 0.05 * pulse(n, 32, 0.04, 0.6) + 0.015 * pulse(n, 48, 0.04, 0.5) + 0.04 * pulse(n, 124, 0.04, 0.5) + 0.14 * pulse(n, 140, 0.04, 0.9) + 0.03 * pulse(n, 184, 0.04, 0.5) + 0.05 * pulse(n, 208, 0.04, 0.6) + 0.13 * pulse(n, 256, 0.04, 0.9);   // v3 calm: soft glows, no white-outs
   if (fl > 0.003) { c.globalCompositeOperation = 'lighter'; c.globalAlpha = Math.min(1, fl); c.fillStyle = '#FFF1D6'; c.fillRect(0, 0, W, H); }
   // grain (re-rolled every 2 frames)
-  const g = Math.floor(t * FPS / 2);
+  const g = bD(t);
   c.globalCompositeOperation = 'overlay'; c.globalAlpha = 0.07;
   const ox = -Math.floor(hs(g, 1) * 384), oy = -Math.floor(hs(g, 2) * 384);
   for (let y = oy; y < H; y += 384) for (let x = ox; x < W; x += 384) c.drawImage(IMG.grain, x, y);
   c.globalCompositeOperation = 'source-over'; c.globalAlpha = 1;
   c.drawImage(IMG.vig, 0, 0, W, H);
   // fade in / out
-  const fo = clamp((t - (DUR - 0.6)) / 0.55) + (t < 0.05 ? 1 - t / 0.05 : 0);
+  const fo = clamp((tv - (DUR - 0.6)) / 0.55) + (tv < 0.05 ? 1 - tv / 0.05 : 0);
   if (fo > 0) { c.globalAlpha = clamp(fo); c.fillStyle = '#05080F'; c.fillRect(0, 0, W, H); }
   c.restore();
 }
 
 // ------------------------------------------------------------------ frame
-export function render(t) {
-  const st = S.state(t), n = st.n;
-  BOIL.seed = Math.floor(t * FPS / 2); BOIL.amp = 1.05;
+let TV = 0, NV = 0, RT = 0;   // video time / video beat of the current frame (the story clock t, n stops during the ④ insert)
+export function render(tv) {
+  const nv = globalThis.__NVFIX ?? S.warpNV(tv), t = S.bt(S.storyN(nv));   // (__NVFIX: tools sample a video beat directly)
+  globalThis.__TV = globalThis.__BOILFIX ?? tv;   // real time: the boil keeps breathing during holds
+  globalThis.__TVB = S.bt(nv); TV = S.bt(nv); NV = nv; RT = tv;   // video-beat clock (④ insert)
+  const st = S.state(t, nv), n = st.n;
+  BOIL.seed = bD(t); BOIL.amp = 1.05;
   const sh = shakeAt(t);
   c.setTransform(dpr, 0, 0, dpr, 0, 0);
   c.globalAlpha = 1; c.globalCompositeOperation = 'source-over';
@@ -591,5 +825,5 @@ export function render(t) {
   f.restore();
   drawTexts(f, t, n);
   composite(f, n);
-  post(t, n);
+  post(t, n, tv);
 }

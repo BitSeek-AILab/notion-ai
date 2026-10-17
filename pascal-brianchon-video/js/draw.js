@@ -2,6 +2,8 @@
 import { PAL, N3, clamp, lerp, hs, E } from './engine.js';
 
 export const BOIL = { seed: 0, amp: 1.05, scale: 95 };
+// boil clock: always runs on VIDEO time (keeps boiling while the story holds during an insert)
+export const bD = (t) => Math.floor((globalThis.__TV ?? t) * 15);
 // displace a screen point by the current boil field (coincident points move together → incidences stay visually exact)
 export function bp(p) {
   const z = BOIL.seed * 2.371 + 0.5, s = BOIL.scale, a = BOIL.amp;
@@ -190,4 +192,16 @@ export function sparks(c, p, u, o = {}) {
     c.beginPath(); c.moveTo(p[0] + Math.cos(ang) * d1, p[1] + Math.sin(ang) * d1); c.lineTo(p[0] + Math.cos(ang) * d0, p[1] + Math.sin(ang) * d0); c.stroke();
   }
   c.restore();
+}
+
+// hand-drawn check mark centred at p (size ≈ its width); o.u = draw-on progress 0..1
+export function check(c, p, size, o = {}) {
+  const u = clamp(o.u ?? 1), a = o.alpha ?? 1;
+  if (a <= 0.003 || u <= 0) return;
+  const A = [p[0] - 0.42 * size, p[1] + 0.02 * size], B = [p[0] - 0.12 * size, p[1] + 0.32 * size], C = [p[0] + 0.48 * size, p[1] - 0.38 * size];
+  const u1 = clamp(u / 0.35), u2 = clamp((u - 0.35) / 0.65), w = o.w ?? Math.max(3, size * 0.14);
+  for (const [w0, col, al, halo] of [[w * 2.1, '#0B1320', 0.6, 0], [w, o.color || PAL.gold, 1, 2.2]]) {
+    if (u1 > 0) sline(c, A, B, { w: w0, color: col, alpha: a * al, to: u1, halo });
+    if (u2 > 0) sline(c, B, C, { w: w0, color: col, alpha: a * al, to: u2, halo });
+  }
 }
