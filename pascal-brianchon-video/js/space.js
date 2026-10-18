@@ -85,7 +85,10 @@ export function drawSpace(f, st, t, n, LY) {
   const extIV = (m) => (II ? 0 : E.out2(ramp(228.4 + 0.7 * m, 229.2 + 0.7 * m, n, 'lin')) * (1 - ramp(255.6, 256, n)));
   const pIV = (m) => (II ? 0 : clamp((n - (229.2 + 0.7 * m)) / 0.3) * (1 - ramp(255.6, 256, n)));
   const sigA = II ? 0 : ramp(231.6, 232.8, n) * (1 - ramp(255.6, 256, n));
-  const sideHi = (k) => (II ? 0 : [win(n, 234.2, 235.0, 243.6, 244.4), win(n, 244.6, 245.2, 246.4, 247.0), win(n, 246.6, 247.2, 248.2, 248.8)][k]);
+  // v4: the side lights up with a quick attack + a short flash, so the moment can sit on a note
+  const hiOn = (a, b, c, d) => E.out2(ramp(a, b, n, 'lin')) * (1 - ramp(c, d, n));
+  const sideHi = (k) => (II ? 0 : [hiOn(234.2, 234.55, 243.6, 244.4), hiOn(244.6, 244.9, 246.4, 247.0), hiOn(246.6, 246.9, 248.2, 248.8)][k]);
+  const sideFl = (k) => (II ? 0 : pulse(n, [234.2, 244.6, 246.6][k], 0.06, 0.9));
   const bigPl = (k) => (II ? 0 : [win(n, 235.2, 236.4, 242.8, 243.8), win(n, 244.8, 245.4, 246.2, 246.8), win(n, 246.8, 247.4, 248.0, 248.6)][k]);
   const trace = (k) => (II ? 0 : E.out2(ramp(...[[238.6, 240.2], [245.2, 246.0], [246.9, 247.7]][k], n, 'lin')));
   const xPop = (k) => (II ? 0 : clamp((n - [241.8, 246.2, 247.9][k]) / 0.3));
@@ -395,7 +398,7 @@ export function drawSpace(f, st, t, n, LY) {
     g.addColorStop(0, rgba('#FF8FA3', 0.35 * qRed)); g.addColorStop(1, rgba(PAL.red, 0));
     f.fillStyle = g; f.beginPath(); f.arc(q[0], q[1], r, 0, TAU); f.fill(); f.restore();
   }
-  if (!II) drawDandelinHigh(f, st, t, n, { extIV, pIV, sigA, sideHi, xPop, redA, at, D });
+  if (!II) drawDandelinHigh(f, st, t, n, { extIV, pIV, sigA, sideHi, sideFl, xPop, redA, at, D });
 }
 
 // ---------------------------------------------------------------- ④ insert (video beats 123–127, the story waits at 123)
@@ -590,7 +593,7 @@ function drawDandelinHigh(f, st, t, n, o) {
     const d = G.sub3(p1, p0), u = (pp) => G.dot3(G.sub3(pp, p0), d) / G.dot3(d, d);
     const lo = Math.min(...pts.map(u)), hi = Math.max(...pts.map(u));
     const e0 = G.add3(p0, G.mul3(d, lo - 0.06)), e1 = G.add3(p0, G.mul3(d, hi + 0.06));
-    sline(f, P(e0), P(e1), { w: 3.4 + 2 * o.sideHi(k), color: PAIR[k], alpha: a, halo: 2 + 2 * o.sideHi(k) });
+    sline(f, P(e0), P(e1), { w: 3.4 + 2 * o.sideHi(k) + 1.6 * o.sideFl(k), color: PAIR[k], alpha: a, halo: 2 + 2 * o.sideHi(k) + 2.5 * o.sideFl(k) });
   }
   for (let m = 0; m < 3; m++) { const pp = o.pIV(m); if (pp > 0) { const q = P(PK[m]); ball(f, q, 10 * Math.sqrt(q[2]) * E.outBack(pp, 2.6), BALL.gold, { halo: 3 }); ringWave(f, q, o.at(229.2 + 0.7 * m, 0.5), { R: 60, w: 3.5, color: PAL.cream }); } }
   for (let k = 0; k < 3; k++) {

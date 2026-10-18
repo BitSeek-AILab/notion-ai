@@ -2,6 +2,7 @@
 // Every frame is recomputed from scratch from the six angles → all incidences are exact at every instant.
 import * as G from './geo.js';
 import { K, E, clamp, inv, lerp } from './engine.js';
+import { SYNC } from './sync.js';
 
 export const W = 1080, H = 1920, FPS = 30;
 export const T0 = 0.489, BEAT = 0.73742;          // music grid (Memory Reboot, 81.365 BPM half-time; first downbeat 0.489 s)
@@ -69,11 +70,26 @@ function kInt(a, b) {   // ∫_a^b k(u) du for the piecewise-linear SPEED profil
   for (let i = 1; i < cuts.length; i++) s += 0.5 * (kAt(cuts[i - 1]) + kAt(cuts[i])) * (cuts[i] - cuts[i - 1]);
   return s;
 }
-export function realT(nv) {
+// v4 卡点: tools/sync.mjs nudges the key moments (edges lighting up, crossings, collinear / concurrent) onto the
+// piano's note onsets. Each term [c, d, w, shape] adds d seconds, eased over video beats c ± w/2: 'h' = the same
+// quintic ease as a hold (it lengthens / shortens that hold), 'p' = a plateau ease (a gentle, almost uniform change of
+// pace across a stretch of animation, ≤ ±30 %). Net sum is 0, so the film length and the music placement are unchanged.
+function plat(x, r = 0.25) {   // ∫ of a flat-topped rate bump with half-cosine shoulders (peak 1/(1−r))
+  if (x <= 0) return 0; if (x >= 1) return 1;
+  const A = 1 / (1 - r), g = (u) => A * (u / 2 - (r / (2 * Math.PI)) * Math.sin((Math.PI * u) / r));
+  return x < r ? g(x) : x <= 1 - r ? A * (r / 2 + (x - r)) : 1 - g(1 - x);
+}
+export function syncT(nv, list = SYNC) {
+  let s = 0;
+  for (const [c, d, w, sh] of list) { const x = (nv - c) / w + 0.5; s += d * (sh === 'p' ? plat(x) : sstep(x)); }
+  return s;
+}
+export function realT0(nv) {   // the v3 teacher's clock (before 卡点)
   let s = BEAT * (nv >= NV0 ? kInt(NV0, nv) : -kInt(nv, NV0));
   for (const [c, h, w] of HOLDS) s += h * sstep((nv - c) / w + 0.5);
   return s;
 }
+export function realT(nv) { return realT0(nv) + syncT(nv); }
 export function warpNV(tv) {
   let a = NV0 - 2, b = NVEND + 2;
   for (let i = 0; i < 56; i++) { const m = 0.5 * (a + b); if (realT(m) < tv) a = m; else b = m; }

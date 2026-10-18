@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""帕斯卡 ↔ 布列安桑 v3 · 配乐 + 柔和点缀音 + 混音母带
+"""帕斯卡 ↔ 布列安桑 v4 · 配乐 + 柔和点缀音 + 混音母带
 
 配乐：两首肖邦夜曲（公有领域录音，Musopen「Set Chopin Free」，Wikimedia Commons；下载：tools/get_music.sh）
   A  《降 E 大调夜曲》Op. 9 No. 2 · Frank Levy      —— 从第 0 秒开始，完整播放（第一、二幕）
@@ -11,6 +11,8 @@
   · 音高从“这一刻音乐里正在响的音”（色度分析）里挑：高音钟片只用降 E 大调五声音阶（E♭ F G B♭ C），
     低音钟从 6 个降 E 大调常用和弦里挑最贴合的一个，所以不会和钢琴打架；
   · 时刻用“剧情拍”书写，由 js/scene.js 的老师节奏时钟 realT() 换算成真实秒数（含所有停顿），与画面逐帧一致。
+  · v4 卡点：这些时刻（以及全片 85 个关键节点）已由 tools/sync.mjs 挪到钢琴的起音上（画面早 LEAD = 25 ms），
+    钟声就放在“画面时刻 + LEAD”= 钢琴起音那一刻，和钢琴的音头合在一起，不会出现前后两下的“双击”。
 
   python3 tools/sfx.py [--a audio/chopin_op9n2_levy.flac] [--b audio/chopin_op55n2_xuanhe.flac] [--out out/audio_master.wav]
 母带：整体 -17 LUFS（安静的钢琴片，不追求响），真峰值 ≤ -1.5 dBTP（AAC 编码后仍 ≤ -1）。
@@ -29,15 +31,19 @@ SR = 48000
 ROOT = Path(__file__).resolve().parent.parent
 B_END = 176.5          # 片尾落在 B 的第 176.5 秒：那里是一个乐句的呼吸（-40 dB 的停顿）
 TUNE_A, TUNE_B = 0.7, -2.3   # 两份录音的实测调音偏差（音分，相对 A=440）
+LEAD = 0.025                 # 画面比钢琴起音早多少（由 js/sync.js 覆盖）
 
 def scene(beats):
     """剧情拍（数字）/ 画面拍（'v…'）→ 真实秒数；同时返回片长 DUR。直接调用 js/scene.js（与画面同一个时钟）。"""
-    code = ("const S = await import(process.argv[1]); const b = JSON.parse(process.argv[2]);"
+    code = ("const S = await import(process.argv[1]); const Y = await import(process.argv[1].replace('scene.js', 'sync.js'));"
+            "const b = JSON.parse(process.argv[2]);"
             "const vb = (x) => typeof x === 'string' ? +x.slice(1) : (x < S.INS0 ? x : x + S.INSD);"
-            "console.log(JSON.stringify({ dur: S.DUR, t: b.map((x) => S.realT(vb(x))) }));")
+            "console.log(JSON.stringify({ dur: S.DUR, lead: Y.LEAD, t: b.map((x) => S.realT(vb(x))) }));")
     r = subprocess.run(['node', '--input-type=module', '-e', code, (ROOT / 'js' / 'scene.js').as_uri(), json.dumps(beats)],
                        check=True, capture_output=True, text=True)
     d = json.loads(r.stdout)
+    global LEAD
+    LEAD = d['lead']
     return d['dur'], d['t']
 
 # ------------------------------------------------------------------ helpers
@@ -211,7 +217,7 @@ CUES = [
     (32.0, 'bell', -7, 0.0, '③ 竟然交于一点'),
     (124.0, 'pair', -9, 0.0, '④ 只能交于同一点 Q'),
     (140.0, 'boom', -5, 0.0, '⑤ 降维打击'),
-    ((184.0, 184.35), 'run', -9, (-0.3, 0.3), '⑥ 你在我的线上 ⇔ 我在你的线上（一问一答）'),
+    ((184.0, 184.4068), 'run', -9, (-0.3, 0.3), '⑥ 你在我的线上 ⇔ 我在你的线上（一问一答：第二声落在字幕落地的那个音上）'),
     ((208.0, 208.12, 208.24), 'run', -9, (-0.15, 0.0, 0.15), '⑦ 帕斯卡定理也成立'),
     ((229.2, 229.9, 230.6), 'run', -9, (-0.2, -0.1, 0.1), '⑧ 空间里对边交出 3 个点'),
     (256.0, 'boom', -5, 0.0, '⑨ 降维打击 2.0'),
@@ -250,7 +256,7 @@ def main():
     bus = np.zeros((N, 2))
     for b, kind, rel, pan, label in CUES:
         bs = list(b) if isinstance(b, tuple) else [b]
-        t0s = [T(x) + 0.03 for x in bs]
+        t0s = [T(x) + LEAD for x in bs]
         cents = TUNE_A if t0s[0] < b_at + 1 else TUNE_B
         ev = []   # (t0, mono signal, pan)
         if kind == 'run':
