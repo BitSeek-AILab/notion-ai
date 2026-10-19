@@ -6,9 +6,14 @@
 | simplex-noise.js（`vendor/`） | Jonas Wagner | MIT |
 | Noto Serif CJK SC Black / Bold（标题、副标题字形） | [notofonts/noto-cjk](https://github.com/notofonts/noto-cjk) | SIL OFL 1.1 |
 | LXGW WenKai Medium 霞鹜文楷（手写注释字形） | [lxgw/LxgwWenKai](https://github.com/lxgw/LxgwWenKai) | SIL OFL 1.1 |
+| Noto Sans SC Medium / Bold（v5 乐谱带文字，`tools/strip.py`） | [notofonts/noto-cjk](https://github.com/notofonts/noto-cjk) | SIL OFL 1.1 |
 | 配乐 A：肖邦《降 E 大调夜曲》Op. 9 No. 2 · Frank Levy 演奏 | Musopen「Set Chopin Free」· [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Chopin_-_Nocturne_No._2_in_E-flat_major,_Op._9_No._2_%28Frank_Levy%29.flac)（`tools/get_music.sh` 下载，不随仓库分发） | 公有领域（作品与录音） |
 | 配乐 B：肖邦《降 E 大调夜曲》Op. 55 No. 2 · Xuan He 演奏 | Musopen「Set Chopin Free」· [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Chopin_-_Nocturne_No._16_in_E-flat_major,_Op._55_No._2_%28Xuan_He%29.flac)（同上） | 公有领域（作品与录音） |
+| 乐谱 A：肖邦《降 E 大调夜曲》Op. 9 No. 2 的 LilyPond 源文件（`score/chopin_nocturne_op9_n2.ly`，入库）与 MIDI（`tools/get_music.sh` 下载；v5 逐音对齐与乐谱带用） | [Mutopia Project](https://www.mutopiaproject.org/cgibin/piece-info.cgi?id=1590) · Renato Biolcati Rinaldi 制谱（Mutopia-2014/12/18-1590，底本 G. Schirmer, New York, 1881） | CC BY-SA 3.0（原样分发，文件头保留许可声明） |
+| 乐谱 B：Op. 55 No. 2 的参考 MIDI（只用于 v5 逐音对齐） | [kunstderfuge.com](https://www.kunstderfuge.com/chopin.htm)（制谱者不详；`tools/get_music.sh` 下载到 `score/op55n2_ref.mid`） | 未声明可再分发 → 不随仓库分发 |
 
 - `assets/glyphs.json`（由 `tools/glyphs.py` 生成，体积较大未入库）是从上述 OFL 字体中提取的字形轮廓数据，随 SIL OFL 1.1 分发。
 - 所有几何图形、立体光影、光环特效均由代码逐帧计算绘制，原创。
 - 点缀音（钟片 / 低音钟）均由 `tools/sfx.py` 程序合成，无第三方采样；对两份配乐录音只做了响度对齐、轻微电平平衡与淡入淡出。
+- v5 乐谱带上的音名、小节与拍位来自上面两份乐谱（经 `tools/score_align.py` 对齐到录音），乐句与和声的分析标注为原创；乐谱带由 `tools/strip.py` 逐帧绘制。
+- v5 的 7 处钟片同样由程序合成（`tools/film_audio.py`），无第三方采样。
