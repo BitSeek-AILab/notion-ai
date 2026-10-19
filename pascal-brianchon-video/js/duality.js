@@ -60,7 +60,7 @@ export function drawFlat(f, st, t, n) {
   spoly(f, circ, { w: 3.2, color: PAL.gold, closed: true, alpha: 1 });
   // Brianchon figure: bright after the slam, steps back for the demo, returns for the hexagon reading; outro twin
   const briA = act3 ? K3(n, [[140, 1], [144.6, 1], [146.4, 0.14], [195.8, 0.14], [197.2, 0.85], [209.4, 0.85], [210.6, 1]]) : 0.75 * ramp(260, 261.2, n);
-  const hiB = pulse(n, 140, 0.04, 1.8);
+  const hiB = pulse(S.cuN('slam140'), 0, 0.04, 1.8);
   if (briA > 0.003) {
     for (let i = 0; i < 6; i++) sline(f, Ps(Wv[(i + 5) % 6]), Ps(Wv[i]), { w: 3.2, color: ice, alpha: briA });
     for (let k = 0; k < 3; k++) {
@@ -109,7 +109,7 @@ export function drawFlat(f, st, t, n) {
     // the red line = B's line (through the three crossings)
     const rl = act3 ? E.in2(clamp((n - 205) / 1.4)) : 1;
     if (ok && rl > 0) {
-      const span = G.spanOf(X, 80 / sc), fl = pulse(n, 208, 0.05, 1.2) + pulse(n, 256, 0.04, 1.6);
+      const span = G.spanOf(X, 80 / sc), fl = pulse(S.cuN('slam208'), 0, 0.05, 1.2) + pulse(S.cuN('slam256'), 0, 0.04, 1.6);
       sline(f, Ps(span[0]), Ps(span[1]), { w: 4.4 + 3 * fl, color: mixHex(PAL.red, '#FFD0D8', fl * 0.6), to: rl, tip: rl < 1, tipR: 30, halo: 4.5, alpha: 1 });
     }
     for (let i = 0; i < 6; i++) sdot(f, Ps(A[i]), { r: 8.5, color: PAL.gold, alpha: act3 ? clamp((n - 197.4 - 0.3 * Math.max(0, i - 1)) / 0.3) : 1 });
@@ -196,7 +196,7 @@ function drawDemo(f, st, t, n, D, at) {
     sdot(f, qq, { r: 10.5, s: E.outBack(qA, 2.4), color: QC, core: '#FFFFFF', halo: 3, alpha: 1 });
     lbl(f, 'Q(c, d)', [qq[0] + 70, qq[1] - 34], { size: 42, fill: QC, alpha: qA, D, anim: popIn(t, bt(176.5), 0, 0.24) });
     if (n > 182.3 && n < 184) ringWave(f, Ps(Pp), at(182.4, 0.6), { R: 70, w: 4, color: QC });
-    if (n > 183.9 && n < 186) ringWave(f, Ps(Pp), at(184, 0.7), { R: 130, w: 5, color: PAL.cream });
+    if (n > 183.9 && n < 186) ringWave(f, Ps(Pp), S.cuS('slam184') / 0.7, { R: 130, w: 5, color: PAL.cream });
   }
   f.restore();
   // the formula card

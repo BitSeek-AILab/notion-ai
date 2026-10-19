@@ -2,7 +2,7 @@
 // Every frame is recomputed from scratch from the six angles → all incidences are exact at every instant.
 import * as G from './geo.js';
 import { K, E, clamp, inv, lerp } from './engine.js';
-import { SYNC } from './sync.js';
+import { KD, ANCH, CUE, RNAT } from './cues.js';
 
 export const W = 1080, H = 1920, FPS = 30;
 export const T0 = 0.489, BEAT = 0.73742;          // music grid (Memory Reboot, 81.365 BPM half-time; first downbeat 0.489 s)
@@ -13,6 +13,12 @@ export const T0 = 0.489, BEAT = 0.73742;          // music grid (Memory Reboot, 
 //   Act IV  208–256 Dandelin 1826: Pascal proved on the same 3-D figure; slam 256 (降维打击 2.0)
 //   outro   256–278
 export const bt = (n) => T0 + n * BEAT;
+// v5: effects that belong to a scored moment (slams, flashes, rings) run on real time from their note, at natural
+// speed — a teacher's hold or a slower segment never freezes a flash. cuN = natural beats since cue key, cuS = story-seconds.
+let RT_ = 0;
+export const setRT = (t) => { RT_ = t; };
+export const cuN = (key) => (RT_ - CUE[key]) / RNAT;
+export const cuS = (key) => cuN(key) * BEAT;
 export const nOf = (t) => (t - T0) / BEAT;
 export const musicBeat = (n) => n, storyBeat = (m) => m;
 export const END = 278;      // story end (beats)
@@ -27,7 +33,7 @@ const INSCAM = { x: 706, y: 1052, z: 430, s: 1.04, pitch: 15, yaw: 360, ox: -6, 
 // slower (k = seconds per beat ÷ BEAT) and, after each idea, holds still for H seconds (eased over w beats) so
 // the viewer can read, look and think. realT(nv) = real seconds at video beat nv; warpNV(tv) is its inverse.
 export const SPEED = [[-1, 1.4], [47.6, 1.4], [48.6, 1.5],         // Act I a little quicker (simple pictures), Acts II–IV calm,
-  [139.2, 1.5], [139.6, 1.9], [140.4, 1.9], [141.0, 1.5],              // the 降维打击 collapse a touch slower,
+  [143.2, 1.5], [143.6, 1.9], [144.4, 1.9], [145.0, 1.5],              // the 降维打击 collapse a touch slower (video beats = story 139.2–141),
   [259.2, 1.5], [259.6, 1.9], [260.4, 1.9], [261.0, 1.5],              // (same for 2.0 — video beats)
   [267.5, 1.5], [268.5, 1.3]];                                         // the end card a little quicker
 const vb = (n) => (n < INS0 ? n : n + INSD);    // story beat → video beat
@@ -36,15 +42,15 @@ const Hs = (n, h, w = 0.3, q = '') => [vb(n), h, w, q], Hv = (nv, h, w = 0.3, q 
 export const HOLDS = [
   // Act I
   Hs(3.3, 1.0), Hs(5.65, 0.8, 0.2), Hs(7.6, 1.2, 0.2), Hs(11.72, 2.6, 0.06, 'q'), Hs(12.75, 1.8), Hs(15.7, 0.8, 0.2),
-  Hs(19.55, 2.0), Hs(23.55, 1.0), Hs(27.55, 1.2), Hs(31.62, 2.4, 0.06, 'q'), Hs(32.85, 1.8, 0.1), Hs(39.5, 2.0),
+  Hs(19.55, 2.0), Hs(23.55, 1.0), Hs(27.55, 1.2), Hs(31.62, 2.4, 0.06, 'q'), Hs(32.85, 1.8, 0.1), Hs(34.75, 1.5, 0.2), Hs(39.5, 2.0),
   Hs(43.5, 2.0), Hs(46.3, 1.6),
   // Act II
-  Hs(51.0, 1.2), Hs(54.85, 1.2), Hs(57.55, 2.6), Hs(59.42, 1.2, 0.2), Hs(63.5, 1.5), Hs(66.5, 1.2), Hs(71.5, 1.5),
+  Hs(51.0, 1.2), Hs(55.55, 1.2, 0.2), Hs(57.55, 2.6), Hs(59.42, 1.2, 0.2), Hs(63.5, 1.5), Hs(66.5, 1.2), Hs(71.5, 1.5),
   Hs(75.5, 1.2), Hs(76.75, 2.5, 0.3, 'q'), Hs(79.5, 1.0), Hs(83.6, 1.8), Hs(87.5, 1.5), Hs(88.9, 2.2, 0.3, 'q'),
   Hs(90.4, 1.2), Hs(93.0, 2.6), Hs(95.55, 1.5), Hs(99.5, 1.5), Hs(101.95, 2.2), Hs(104.65, 2.0, 0.2), Hs(109.5, 1.5, 0.2),
   Hs(113.5, 1.8, 0.2), Hs(116.65, 2.6, 0.3, 'q'), Hs(120.5, 1.5), Hs(122.45, 2.8),
   Hv(124.12, 2.8, 0.1), Hv(126.15, 2.8, 0.05),                         // the ④ insert (video beats)
-  Hs(125.1, 2.2, 0.2), Hs(131.5, 1.2), Hs(135.5, 1.5), Hs(139.2, 1.2), Hs(142.5, 2.5),
+  Hs(125.1, 2.2, 0.2), Hs(131.5, 1.2), Hs(133.6, 1.5), Hs(135.5, 1.5), Hs(139.2, 1.2), Hs(140.1, 1.2, 0.1), Hs(142.2, 3.0, 0.3), Hs(143.3, 3.0, 0.3),
   // Act III
   Hs(146.3, 1.6), Hs(151.4, 1.0), Hs(155.45, 1.2), Hs(159.5, 1.8), Hs(162.6, 2.6, 0.3, 'q'), Hs(167.4, 2.0),
   Hs(171.4, 2.0), Hs(175.4, 1.5), Hs(179.4, 2.6, 0.3, 'q'), Hs(183.4, 2.0), Hs(185.4, 2.5), Hs(195.55, 2.0),
@@ -70,32 +76,63 @@ function kInt(a, b) {   // ∫_a^b k(u) du for the piecewise-linear SPEED profil
   for (let i = 1; i < cuts.length; i++) s += 0.5 * (kAt(cuts[i - 1]) + kAt(cuts[i])) * (cuts[i] - cuts[i - 1]);
   return s;
 }
-// v4 卡点: tools/sync.mjs nudges the key moments (edges lighting up, crossings, collinear / concurrent) onto the
-// piano's note onsets. Each term [c, d, w, shape] adds d seconds, eased over video beats c ± w/2: 'h' = the same
-// quintic ease as a hold (it lengthens / shortens that hold), 'p' = a plateau ease (a gentle, almost uniform change of
-// pace across a stretch of animation, ≤ ±30 %). Net sum is 0, so the film length and the music placement are unchanged.
-function plat(x, r = 0.25) {   // ∫ of a flat-topped rate bump with half-cosine shoulders (peak 1/(1−r))
-  if (x <= 0) return 0; if (x >= 1) return 1;
-  const A = 1 / (1 - r), g = (u) => A * (u / 2 - (r / (2 * Math.PI)) * Math.sin((Math.PI * u) / r));
-  return x < r ? g(x) : x <= 1 - r ? A * (r / 2 + (x - r)) : 1 - g(1 - x);
-}
-export function syncT(nv, list = SYNC) {
-  let s = 0;
-  for (const [c, d, w, sh] of list) { const x = (nv - c) / w + 0.5; s += d * (sh === 'p' ? plat(x) : sstep(x)); }
-  return s;
-}
 export function realT0(nv) {   // the v3 teacher's clock (before 卡点)
   let s = BEAT * (nv >= NV0 ? kInt(NV0, nv) : -kInt(nv, NV0));
   for (const [c, h, w] of HOLDS) s += h * sstep((nv - c) / w + 0.5);
   return s;
 }
-export function realT(nv) { return realT0(nv) + syncT(nv); }
+// v5 编舞时钟 (whole film): up to the last knot of the opening (bar 6 of Op. 9 No. 2) the clock is a monotone cubic
+// through [story beat, real second] knots (tools/choreo.py); after it, the film is cut into segments between anchors
+// [video beat, real second] (js/cues.js ANCH: each one = a designed moment ← a note in the performance). Inside a
+// segment the animation keeps its natural (v3) pace × α and the teacher's holds are scaled × β, chosen so the segment
+// lasts exactly as long as the music: realT = t_i + α·BEAT·∫k + β·Σ holds (holds absorb the rubato, animation ≈ natural).
+const KD_N1 = KD[KD.length - 1][0];
+function hermKD(nv) {
+  if (nv <= KD[0][0]) return KD[0][1] + (nv - KD[0][0]) * KD[0][2];
+  let i = 0;
+  while (i < KD.length - 2 && nv > KD[i + 1][0]) i++;
+  const [x0, y0, m0] = KD[i], [x1, y1, m1] = KD[i + 1], h = x1 - x0, s = (nv - x0) / h, s2 = s * s, s3 = s2 * s;
+  return (2 * s3 - 3 * s2 + 1) * y0 + (s3 - 2 * s2 + s) * h * m0 + (-2 * s3 + 3 * s2) * y1 + (s3 - s2) * h * m1;
+}
+export const natA = (a, b) => BEAT * (b >= a ? kInt(a, b) : -kInt(b, a));          // natural animation seconds
+export function natH(a, b) {                                                        // natural hold seconds in [a, b]
+  let s = 0;
+  for (const [c, h, w] of HOLDS) s += h * (sstep((b - c) / w + 0.5) - sstep((a - c) / w + 0.5));
+  return s;
+}
+export const SEG = [];
+{ const L = [[KD_N1, KD[KD.length - 1][1]], ...ANCH.filter((a) => a[0] > KD_N1 + 1e-6)];
+  for (let i = 0; i + 1 < L.length; i++) {
+    const [a, ta] = L[i], [b, tb] = L[i + 1], A = natA(a, b), H = natH(a, b), D = tb - ta;
+    // least squares in log space: keep the animation near its natural pace (α ≈ 1, expensive), let the holds
+    // breathe (β, 16× cheaper): minimise ln²α + 0.06·ln²β subject to α·A + β·H = D, β on a log grid [0.25, 4]
+    let al = D / A, be = 1;
+    if (H > 0.05) {
+      let best = Infinity;
+      for (let j = 0; j <= 400; j++) {
+        const bj = Math.exp(Math.log(0.25) + (Math.log(16) * j) / 400), aj = (D - bj * H) / A;
+        if (aj <= 0.05) continue;
+        const c = Math.log(aj) ** 2 + 0.06 * Math.log(bj) ** 2;
+        if (c < best) { best = c; al = aj; be = bj; }
+      }
+      if (best === Infinity) { be = (0.5 * D) / H; al = (0.5 * D) / A; }
+    }
+    SEG.push({ a, b, ta, tb, A, H, al, be });
+  } }
+export function realT(nv) {
+  if (nv <= KD_N1) return hermKD(nv);
+  let lo = 0, hi = SEG.length - 1;
+  if (nv >= SEG[hi].b) { const g = SEG[hi]; return g.tb + natA(g.b, nv) + natH(g.b, nv); }
+  while (lo < hi) { const m = (lo + hi) >> 1; if (nv > SEG[m].b) lo = m + 1; else hi = m; }
+  const g = SEG[lo];
+  return g.ta + g.al * natA(g.a, nv) + g.be * natH(g.a, nv);
+}
 export function warpNV(tv) {
   let a = NV0 - 2, b = NVEND + 2;
   for (let i = 0; i < 56; i++) { const m = 0.5 * (a + b); if (realT(m) < tv) a = m; else b = m; }
   return 0.5 * (a + b);
 }
-export const DUR = Math.round(realT(NVEND) * 100) / 100;   // video length in seconds (story beat END)
+export const DUR = Math.round(realT(NVEND) * 100) / 100;   // = the last anchor (end of the music + its tail)   // video length in seconds (story beat END)
 export const D2R = Math.PI / 180;
 
 export const CIRC = { x: 655, y: 978, r: 222 };
@@ -178,7 +215,7 @@ export function geomAt(n) {
 // weights of the point groups the 2-D camera keeps in frame
 const ramp = (a, b, n) => E.io2(inv(a, b, n));
 // crossing k → diagonal k (beats 28.3+k … 29+k)
-export const flightK = (n, k) => E.io2(inv(28.3 + k, 29 + k, n));
+export const flightK = (n, k) => E.io2(clamp((realT(n) - CUE.fly[k]) / (0.7 * RNAT)));   // v5: starts on its note (js/cues.js)
 export function wX(n) {
   if (n < 20) return ramp(8.0, 9.3, n);
   if (n < 40) return 1 - ramp(28.3, 31.5, n);              // the crossings fly off into the diagonals

@@ -79,11 +79,15 @@ def main():
     ap.add_argument('--a', default=str(sfx.ROOT / 'audio' / 'chopin_op9n2_levy.flac'))
     ap.add_argument('--b', default=str(sfx.ROOT / 'audio' / 'chopin_op55n2_xuanhe.flac'))
     ap.add_argument('--out', default=str(sfx.ROOT / 'out' / 'music_onsets.json'))
+    ap.add_argument('--raw', default=None, help='v5: analyse one recording as-is (its own time axis), e.g. audio/chopin_op55n2_xuanhe.flac')
     a = ap.parse_args()
-    dur, _ = sfx.scene([])
-    music, b_at = sfx.music_bed(a.a, a.b, dur)
-    music, _ = sfx.level(music)
-    mono = music.mean(axis=1)
+    if a.raw:
+        music = sfx.decode(a.raw); dur, b_at = len(music) / SR, None
+    else:
+        dur, _ = sfx.scene([])
+        music, b_at = sfx.music_bed(a.a, a.b, dur)
+        music, _ = sfx.level(music)
+    mono = music.mean(axis=1) if music.ndim > 1 else music
     del music
     F = spectra_flux(mono)
     sm = lambda v: uniform_filter1d(v, 3)
@@ -118,7 +122,7 @@ def main():
     Path(a.out).write_text(json.dumps(out))
     ioi = np.diff(R[:, 0])
     strong = R[acc > 1.6, 0]
-    print(f'DUR {dur:.2f}s, B at {b_at:.2f}s | {len(R)} onsets ({len(R) / dur:.2f}/s), median IOI {np.median(ioi) * 1000:.0f} ms, '
+    print(f'DUR {dur:.2f}s, B at {b_at} | {len(R)} onsets ({len(R) / dur:.2f}/s), median IOI {np.median(ioi) * 1000:.0f} ms, '
           f'{len(strong)} accents (acc>1.6, median gap {np.median(np.diff(strong)):.2f}s) -> {a.out}')
 
 

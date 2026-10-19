@@ -14,6 +14,7 @@ import { loadGlyphs, letters, measure, popIn, slamIn, dropOut } from './text.js'
 import { drawPool } from './lit3d.js';
 import { drawSpace } from './space.js';
 import { drawFlat, demoAt } from './duality.js';
+import { CUE, CAPS, RNAT } from './cues.js';
 
 export const W = S.W, H = S.H, FPS = S.FPS, DUR = S.DUR;
 const bt = S.bt;
@@ -21,6 +22,28 @@ let cv, c, dpr = 1, LY;
 const IMG = {};
 const ramp = (a, b, n, e = 'io2') => E[e](inv(a, b, n));
 const pulse = (n, n0, up, down) => (n < n0 ? 0 : n < n0 + up ? E.out2((n - n0) / up) : 1 - E.io2(clamp((n - n0 - up) / down)));
+// v5 编舞 (js/cues.js): every choreographed element starts at the real time of its note in Levy's performance and then
+// plays at its natural speed, whatever the rubato does. CU(c) = natural story beats since real cue time c (< 0 before);
+// CT(n0, c) = story-seconds clock of an element designed at beat n0 that lands at real time c.
+const CU = (c) => (RT - c) / RNAT;
+const CT = (n0, c) => bt(n0) + (RT - c) / 1.4;
+function monoSpline(xs, ys) {   // Fritsch–Carlson monotone cubic through (xs, ys), clamped outside
+  const n = xs.length, d = [], m = [];
+  for (let i = 0; i < n - 1; i++) d.push((ys[i + 1] - ys[i]) / (xs[i + 1] - xs[i]));
+  m[0] = d[0]; m[n - 1] = d[n - 2];
+  for (let i = 1; i < n - 1; i++) {
+    const h0 = xs[i] - xs[i - 1], h1 = xs[i + 1] - xs[i];
+    m[i] = d[i - 1] * d[i] <= 0 ? 0 : (3 * (h0 + h1)) / ((2 * h1 + h0) / d[i - 1] + (h1 + 2 * h0) / d[i]);
+  }
+  return (x) => {
+    if (x <= xs[0]) return ys[0]; if (x >= xs[n - 1]) return ys[n - 1];
+    let i = 0; while (x > xs[i + 1]) i++;
+    const h = xs[i + 1] - xs[i], s = (x - xs[i]) / h, s2 = s * s, s3 = s2 * s;
+    return (2 * s3 - 3 * s2 + 1) * ys[i] + (s3 - 2 * s2 + s) * h * m[i] + (-2 * s3 + 3 * s2) * ys[i + 1] + (s3 - s2) * h * m[i + 1];
+  };
+}
+const strokeAt = monoSpline(CUE.stroke, [0, 1, 2, 3, 4, 5, 6]);   // the pen reaches vertex k on melody note k of bar 2
+const traceAt = monoSpline(CUE.trace, [0, 1, 2, 3, 4, 5, 6]);     // the tracer reaches corner k on note k of bar 8 (A♭5 G5 A♭5 A♭5 C5 D5 E♭5)
 
 // ------------------------------------------------------------------ init
 function mk(w, h) { const k = document.createElement('canvas'); k.width = Math.max(1, Math.round(w)); k.height = Math.max(1, Math.round(h)); return k; }
@@ -70,13 +93,13 @@ function drawBG(x, st, sh) {
   const P = st.P, sp = 56, C = S.CIRC;
   const cam = st.cam, pitch = cam.pitch;
   const R = pitch > 1 ? 1700 : 1400;
-  x.save(); x.translate(sh[0] * 0.5, sh[1] * 0.5);
+  x.save(); x.transform(KAP, 0, 0, KAP, KX, 0); x.translate(sh[0] * 0.5, sh[1] * 0.5);
   x.fillStyle = PAL.grid;
   const gx0 = Math.floor((C.x - R) / sp) * sp, gy0 = Math.floor((C.y - R * 1.3) / sp) * sp;
   for (let gx = gx0; gx <= C.x + R; gx += sp) {
     for (let gy = gy0; gy <= C.y + R * 1.3; gy += sp) {
       const q = P([gx, gy, 0]);
-      if (q[0] < -10 || q[0] > W + 10 || q[1] < -10 || q[1] > H + 10) continue;
+      if (q[0] < -KX / KAP - 10 || q[0] > W + KX / KAP + 10 || q[1] < -10 || q[1] > H + 10) continue;
       const fog = clamp(1 - (q[3] - 2600) / 2200) * clamp(1 - Math.hypot(gx - C.x, gy - C.y) / (R * 1.05));
       if (fog <= 0.02) continue;
       const r = 1.7 * Math.min(1.6, q[2]);
@@ -131,10 +154,10 @@ function drawForward(f, st, t, n) {
   const pre = n < 40;                                                   // the construction (before the twins)
   const twinA = pre ? 0 : ramp(40, 41, n) * (1 - ramp(44, 45, n));       // inscribed twin over the dual figure
   const dimIns = n < 20.2 ? 1 : 1 - 0.72 * ramp(20.2, 21.2, n);         // the Pascal figure steps back while the dual grows
-  const gone = (k) => 1 - ramp(SCH.fly(k), SCH.fly(k) + 0.6, n);         // pair k leaves together with its crossing
+  const gone = (k) => 1 - E.io2(clamp(CU(CUE.fly[k]) / 0.6));            // pair k leaves together with its crossing (v5: on its note)
   const As = A.map(Ps);
   // ---- circumscribed hexagon: a brief glass fill when it closes
-  const fillA = 0.13 * pulse(n, 27.0, 0.3, 1.5);
+  const fillA = 0.13 * pulse(CU(CUE.trace[6]), 0, 0.3, 1.5);              // (v5: when the tracer closes the hexagon)
   if (fillA > 0.003) sfill(f, Wv.map(Ps), ice, fillA);
   // ---- inscribed hexagon: one-stroke draw-on, then the three pairs of opposite sides light up
   for (let i = 0; i < 6; i++) {
@@ -142,9 +165,9 @@ function drawForward(f, st, t, n) {
     let a, w = 3.2, fr = 1, col, halo;
     if (pre) {
       a = dimIns * gone(k);
-      fr = clamp(((n - SCH.side0) / (SCH.side1 - SCH.side0)) * 6 - i);
-      col = mixHex(PAL.gold, PAIR[k], 0.85 * clamp((n - SCH.pair(k)) / 0.25));
-      const pp = pulse(n, SCH.pair(k), 0.08, 0.9);
+      fr = clamp(strokeAt(RT) - i);
+      col = mixHex(PAL.gold, PAIR[k], 0.85 * clamp(CU(CUE.pair[k]) / 0.25));
+      const pp = pulse(CU(CUE.pair[k]), 0, 0.08, 0.9);
       w += 3.4 * pp; if (pp > 0.01) halo = 2 + 2.5 * pp;
     } else { a = 0.7 * twinA; w = 2.4; col = mixHex(PAL.gold, PAIR[k], 0.85); }
     if (a <= 0.003 || fr <= 0) continue;
@@ -152,20 +175,22 @@ function drawForward(f, st, t, n) {
   }
   // ---- extensions of each pair to its crossing
   if (ok) for (let k = 0; k < 3; k++) {
-    const dr = E.out2(clamp((n - SCH.ext(k)) / 0.6));
+    const [e0, e1] = CUE.ext[k], pr = E.io2(clamp((RT - e0) / (e1 - e0))), ov2 = E.out2(clamp((RT - e1) / 0.25));
+    const dr = pr;
     const a = pre ? 0.9 * dimIns * gone(k) : 0.3 * twinA;
     if (dr <= 0 || a <= 0.003) continue;
     for (const side of [k, k + 3]) {
       const p = A[side], q = A[(side + 1) % 6], Xk = X[k];
       const near = G.dist(p, Xk) < G.dist(q, Xk) ? p : q;
       const over = G.add(Xk, G.mul(G.nrm(G.sub(Xk, near)), 46 / sc));
-      sline(f, Ps(near), Ps(over), { w: 2.2, color: PAIR[k], to: dr, tip: dr < 1, alpha: a });
+      const L = G.dist(near, Xk), Lo = 46 / sc, to = (pr * L + ov2 * Lo) / (L + Lo);
+      sline(f, Ps(near), Ps(over), { w: 2.2, color: PAIR[k], to, tip: to < 1, alpha: a });
     }
   }
   // ---- point → tangent line (grows out of the point, overshoots, then trims to the circumscribed hexagon)
   const ov = 0.45 * (1 - ramp(SCH.ret0, SCH.ret1, n));
   for (let i = 0; i < 6; i++) {
-    const g = E.out2(clamp((n - SCH.tan(i)) / 0.45));
+    const g = E.out2(clamp(CU(CUE.tan[i]) / 0.45));
     if (g <= 0) continue;
     const a0 = A[i], e0 = G.add(a0, G.mul(G.sub(Wv[(i + 5) % 6], a0), g * (1 + ov))), e1 = G.add(a0, G.mul(G.sub(Wv[i], a0), g * (1 + ov)));
     const q0 = Ps(e0), q1 = Ps(e1);
@@ -173,8 +198,8 @@ function drawForward(f, st, t, n) {
     if (g < 1) { tip(f, q0, 18, ice, 1); tip(f, q1, 18, ice, 1); }
   }
   // ---- one-stroke tracer around the circumscribed hexagon: six sides, six corners
-  if (pre && n > SCH.trace0 && n < SCH.trace1 + 0.8) {
-    const pr = ((n - SCH.trace0) / (SCH.trace1 - SCH.trace0)) * 6, fa = 1 - ramp(SCH.trace1 + 0.1, SCH.trace1 + 0.7, n);
+  if (pre && RT > CUE.trace[0] && CU(CUE.trace[6]) < 0.8) {   // v5: corner k on melody note k of bar 8 (traceAt)
+    const pr = traceAt(RT), fa = 1 - E.io2(clamp((CU(CUE.trace[6]) - 0.1) / 0.6));
     for (let e = 0; e < 6; e++) {
       const fr = clamp(pr - e);
       if (fr <= 0) continue;
@@ -191,7 +216,7 @@ function drawForward(f, st, t, n) {
       sline(f, Ps(G.sub(cen, G.mul(d, hl))), Ps(G.add(cen, G.mul(d, hl))), { w: 3, color: PAIR[k], alpha: 1 });
     } else {
       const [a, b] = G.extend(W0, W1, 24 / sc, 24 / sc);
-      const hi = pulse(n, 32, 0.05, 1.5) + pulse(n, 68, 0.04, 1.8);
+      const hi = pulse(S.cuN('slam32'), 0, 0.05, 1.5) + pulse(n, 68, 0.04, 1.8);
       sline(f, Ps(a), Ps(b), { w: 3 + 2 * hi, color: PAIR[k], halo: 2 + 2 * hi, alpha: 1 });
     }
   }
@@ -204,32 +229,32 @@ function drawForward(f, st, t, n) {
       a = G.lerp2(a, Bp, sh); b = G.lerp2(b, Bp, sh);
       aL = 1 - 0.4 * ramp(20.2, 21.2, n) * (1 - ramp(31.0, 31.4, n));
     }
-    if (n < SCH.slam1) sline(f, Ps(a), Ps(b), { w: 4.4, color: PAL.red, to: E.in2(clamp((n - SCH.slice) / 0.2)), tip: true, tipR: 30, halo: 4, alpha: 1 });
+    if (n < SCH.slam1) sline(f, Ps(a), Ps(b), { w: 4.4, color: PAL.red, to: E.in2(clamp((RT - CUE.slice) / (CUE.slam - CUE.slice))), tip: true, tipR: 30, halo: 4, alpha: 1 });
     else {
-      const fl = pulse(n, SCH.slam1, 0.05, 1.2);
+      const fl = pulse(CU(CUE.slam), 0, 0.05, 1.2);
       sline(f, Ps(a), Ps(b), { w: 4.4 + 3 * fl, color: mixHex(PAL.red, '#FFD0D8', fl * 0.6), halo: 4.5, alpha: aL });
     }
   }
   // ---- points on the circle: gold vertices of the inscribed hexagon → small tangent points
   for (let i = 0; i < 6; i++) {
-    const pu = clamp((n - SCH.pt(i)) / 0.32);
+    const pu = clamp(CU(CUE.pt[i]) / 0.32);
     if (pu <= 0) continue;
-    const tg = clamp((n - SCH.tan(i)) / 0.35);
+    const tg = clamp(CU(CUE.tan[i]) / 0.35);
     const ga = pre ? 1 - tg : twinA;
     if (ga > 0.003) sdot(f, As[i], { r: 8.5, s: E.outBack(pu, 2.4), color: PAL.gold, alpha: ga });
     if (tg > 0) sdot(f, As[i], { r: 4.6, color: ice, core: '#0B1320', alpha: 0.75 * tg * (1 - 0.6 * twinA) });
   }
   // ---- circumscribed hexagon vertices
   for (let i = 0; i < 6; i++) {
-    const wp = clamp((n - SCH.wpop(i)) / 0.3);
+    const wp = clamp(CU(CUE.wpop[i]) / 0.3);
     if (wp <= 0) continue;
-    // the tracer passes corner i+1 at trace0 + (i+1)/6 of the stroke: a small bump
-    const tb = pre ? pulse(n, SCH.trace0 + ((i + 1) % 6 || 6) / 6 * (SCH.trace1 - SCH.trace0), 0.06, 0.5) : 0;
+    // the tracer passes corner i (corner 1 = where it starts and closes): a small bump
+    const tb = pre ? pulse(CU(CUE.trace[i === 0 ? 6 : i]), 0, 0.06, 0.5) : 0;
     sdot(f, Ps(Wv[i]), { r: 9, s: E.outBack(wp, 2.4) * (1 + 0.35 * tb), color: ice, core: '#FFFFFF', halo: 2 + 2 * tb, alpha: 1 });
   }
   // ---- the three crossings (pop at 9, 10, 11; fly into the diagonals at 28.3 + k)
   if (ok) for (let k = 0; k < 3; k++) {
-    const pu = clamp((n - (9 + k)) / 0.3);
+    const pu = clamp(CU(CUE.x[k]) / 0.3);
     if (pu <= 0) continue;
     let p = X[k], s = E.outBack(pu, 2.6), a = 1;
     if (pre) {
@@ -242,7 +267,7 @@ function drawForward(f, st, t, n) {
   // ---- the Brianchon point (born from the shrinking red line at 32)
   const bs = clamp((n - 31.9) / 0.25);
   if (bs > 0) {
-    const hi = pulse(n, 32, 0.05, 1.6) + pulse(n, 68, 0.04, 2);
+    const hi = pulse(S.cuN('slam32'), 0, 0.05, 1.6) + pulse(n, 68, 0.04, 2);
     sdot(f, Ps(Bp), { r: 11.5, s: E.outBack(bs, 2.4) * (1 + 0.25 * hi), color: PAL.red, core: '#FFFFFF', halo: 3.5 + 4 * hi, alpha: 1 });
   }
   // ---- point numbers 1–6 (so "in order" and "opposite" are unambiguous)
@@ -250,21 +275,21 @@ function drawForward(f, st, t, n) {
   if (la > 0.003) {
     const O = Ps([st.C.x, st.C.y]);
     for (let i = 0; i < 6; i++) {
-      const t0 = bt(SCH.pt(i) + 0.08);
-      if (t < t0) continue;
+      const t0 = bt(SCH.pt(i) + 0.08), tl = CT(SCH.pt(i), CUE.pt[i]);
+      if (tl < t0) continue;
       const q = As[i], d = G.nrm(G.sub(q, O)), p = [q[0] + d[0] * 40, q[1] + d[1] * 40];
-      letters(f, String(i + 1), { font: 'SM', size: 46, x: p[0], y: p[1], fill: PAL.cream, alpha: la, anim: popIn(t, t0, 0, 0.24, { rot: 0.1 }), D: bD(t), seed: 70 + i, amp: 0.4, knock: 7 });
+      letters(f, String(i + 1), { font: 'SM', size: 46, x: p[0], y: p[1], fill: PAL.cream, alpha: la, anim: popIn(tl, t0, 0, 0.24, { rot: 0.1 }), D: bD(t), seed: 70 + i, amp: 0.4, knock: 7 });
     }
   }
   // ---- corner numbers 1–6 of the circumscribed hexagon (so "opposite corners" 1–4, 2–5, 3–6 are unambiguous)
   const lw = pre ? 1 - ramp(31.1, 31.6, n) : 0;
-  if (lw > 0.003 && n > SCH.wpop(0)) {
+  if (lw > 0.003 && RT > CUE.wpop[0]) {
     const O = Ps([st.C.x, st.C.y]);
     for (let i = 0; i < 6; i++) {
-      const t0 = bt(SCH.wpop(i) + 0.06);
-      if (t < t0) continue;
+      const t0 = bt(SCH.wpop(i) + 0.06), tl = CT(SCH.wpop(i), CUE.wpop[i]);
+      if (tl < t0) continue;
       const q = Ps(Wv[i]), d = G.nrm(G.sub(q, O)), p = [q[0] + d[0] * 40, q[1] + d[1] * 40];
-      letters(f, String(i + 1), { font: 'SM', size: 44, x: p[0], y: p[1], fill: '#DDF6FF', alpha: lw, anim: popIn(t, t0, 0, 0.24, { rot: 0.1 }), D: bD(t), seed: 90 + i, amp: 0.4, knock: 7 });
+      letters(f, String(i + 1), { font: 'SM', size: 44, x: p[0], y: p[1], fill: '#DDF6FF', alpha: lw, anim: popIn(tl, t0, 0, 0.24, { rot: 0.1 }), D: bD(t), seed: 90 + i, amp: 0.4, knock: 7 });
     }
   }
 }
@@ -356,7 +381,7 @@ function drawHand(f, st, t, n) {
       alpha = chainIn ? 1 : u; press = clamp((n - (n0 - 0.12)) / 0.12);
     } else if (n <= n1) { p = pt(n); press = 1; }
     else {
-      const from = pt(n1), u = E.io2(inv(n1, a1, n));
+      const from = pt(n1), u = E.io2(clamp((RT - S.realT(n1)) / (0.5 * RNAT)));
       p = [from[0] + 90 * u, from[1] + 150 * u]; alpha = 1 - u; press = 1 - clamp((n - n1) / 0.12);
     }
     touch(f, p, press, alpha, t, n0);
@@ -368,7 +393,7 @@ function touch(f, p, press, alpha, t, n0) {
   f.beginPath(); f.arc(p[0], p[1], r, 0, Math.PI * 2); f.fillStyle = rgba(PAL.cream, 0.14 + 0.12 * press); f.fill();
   f.lineWidth = 3; f.strokeStyle = rgba(PAL.cream, 0.95); f.stroke();
   f.restore();
-  const dt = t - bt(n0);
+  const dt = (RT - S.realT(n0)) / 1.4;
   if (dt > 0 && dt < 0.5) ringWave(f, p, dt / 0.5, { r0: 24, R: 74, w: 3, color: PAL.cream, alpha: alpha * 0.9 });
 }
 
@@ -380,38 +405,40 @@ function drawImpacts(f, st, t, n) {
   const at = (n0, d) => (t - bt(n0)) / d;
   const X = pas.X, ok = X.every(Boolean);
   // the crossings pop (9, 10, 11)
-  if (ok && n > 8.9 && n < 11.8) for (let k = 0; k < 3; k++) ringWave(f, Ps(X[k]), at(9 + k, 0.5), { R: 70, w: 3, color: PAIR[k] });
+  if (ok && n > 8.9 && n < 13) for (let k = 0; k < 3; k++) ringWave(f, Ps(X[k]), (RT - CUE.x[k]) / (0.5 * 1.4), { R: 70, w: 3, color: PAIR[k] });
   // slam 1: the red line lands
-  if (ok && n > 11.9 && n < 14) for (let k = 0; k < 3; k++) ringWave(f, Ps(X[k]), at(12, 0.7), { R: 100, w: 3.5, color: PAIR[k] });
+  if (ok && n > 11.9 && n < 15) for (let k = 0; k < 3; k++) ringWave(f, Ps(X[k]), (RT - CUE.slam) / (0.7 * 1.4), { R: 100, w: 3.5, color: PAIR[k] });
   // point → tangent line
-  if (n > 20.5 && n < 24) for (let i = 0; i < 6; i++) ringWave(f, Ps(st.A[i]), at(SCH.tan(i), 0.5), { R: 52, w: 3, color: PAL.ice });
+  if (RT > CUE.tan[0] - 0.05 && RT < CUE.tan[5] + 0.8) for (let i = 0; i < 6; i++) ringWave(f, Ps(st.A[i]), (RT - CUE.tan[i]) / (0.5 * 1.4), { R: 52, w: 3, color: PAL.ice });
   // the six corners of the circumscribed hexagon pop one by one
-  if (n > 24.4 && n < 26.6) for (let i = 0; i < 6; i++) ringWave(f, Ps(bri.W[i]), at(SCH.wpop(i), 0.5), { R: 50, w: 3, color: PAL.ice });
+  if (RT > CUE.wpop[0] - 0.05 && RT < CUE.wpop[5] + 0.8) for (let i = 0; i < 6; i++) ringWave(f, Ps(bri.W[i]), (RT - CUE.wpop[i]) / (0.5 * 1.4), { R: 50, w: 3, color: PAL.ice });
   // crossing k → diagonal k: its two opposite vertices light up
-  if (n > 28.2 && n < 31.6) for (let k = 0; k < 3; k++) for (const j of [k, k + 3]) ringWave(f, Ps(bri.W[j]), at(SCH.fly(k), 0.6), { R: 60, w: 3, color: PAIR[k] });
+  if (RT > CUE.fly[0] - 0.05 && RT < CUE.fly[2] + 0.9) for (let k = 0; k < 3; k++) for (const j of [k, k + 3]) ringWave(f, Ps(bri.W[j]), (RT - CUE.fly[k]) / (0.6 * 1.4), { R: 60, w: 3, color: PAIR[k] });
   // slam 2: the Brianchon point
-  if (n > 31.9 && n < 34) ringWave(f, Ps(bri.B), at(32, 0.8), { R: 150, w: 4, color: PAL.red });
+  if (n > 31.9 && n < 34) ringWave(f, Ps(bri.B), S.cuS('slam32') / 0.8, { R: 150, w: 4, color: PAL.red });
+  // v5: the coda's last three E♭ chords — the Brianchon point answers softly
+  if (RT > CUE.coda[0] - 0.1 && RT < CUE.coda[2] + 2) CUE.coda.forEach((tc, j) => ringWave(f, Ps(bri.B), (RT - tc) / (1.3 * 1.4), { R: 90 + 30 * j, w: 2.6, color: j === 2 ? PAL.red : PAL.cream, alpha: 0.55 }));
   // Act II ④: the single meeting point Q
-  if (st.lam > 0.05 && n > 123.95 && n < 126.5) ringWave(f, P(st.lift.Q), at(124, 0.8), { R: 140, w: 4, color: PAL.red });
+  if (st.lam > 0.05 && n > 123.95 && n < 126.5) ringWave(f, P(st.lift.Q), S.cuS('slam124') / 0.8, { R: 140, w: 4, color: PAL.red });
   // 降维打击: the figure lands on its shadow — the Brianchon point
   if (n > 139.95 && n < 143) {
     const q = Ps(bri.B);
-    ringWave(f, q, at(140, 0.9), { R: 240, w: 5, color: PAL.cream });
-    ringWave(f, q, at(140.25, 1.1), { R: 380, w: 3.5, color: PAL.red });
+    ringWave(f, q, S.cuS('slam140') / 0.9, { R: 240, w: 5, color: PAL.cream });
+    ringWave(f, q, (S.cuS('slam140') - 0.25 * S.BEAT) / 1.1, { R: 380, w: 3.5, color: PAL.red });
   }
   // Act III: 你在我的线上 ⇔ 我在你的线上
   if (n > 183.95 && n < 186.5) {
     const dm = demoAt(n);
-    [[dm.Pp, '#FFE3A3'], [dm.Qp, PAL.c2]].forEach(([p, col]) => ringWave(f, Ps(p), at(184, 0.8), { R: 120, w: 4, color: col }));
+    [[dm.Pp, '#FFE3A3'], [dm.Qp, PAL.c2]].forEach(([p, col]) => ringWave(f, Ps(p), S.cuS('slam184') / 0.8, { R: 120, w: 4, color: col }));
   }
   // Pascal for free (flat)
-  if (ok && n > 207.95 && n < 210) for (let k = 0; k < 3; k++) ringWave(f, Ps(X[k]), at(208, 0.7), { R: 110, w: 3.5, color: PAIR[k] });
+  if (ok && n > 207.95 && n < 210) for (let k = 0; k < 3; k++) ringWave(f, Ps(X[k]), S.cuS('slam208') / 0.7, { R: 110, w: 3.5, color: PAIR[k] });
   // 降维打击 2.0: the figure lands, the red line on the floor
   if (ok && n > 255.95 && n < 259) {
     const span = G.spanOf(X, 0), m = Ps(G.lerp2(span[0], span[1], 0.5));
-    ringWave(f, m, at(256, 0.9), { R: 260, w: 5, color: PAL.cream });
-    ringWave(f, m, at(256.25, 1.1), { R: 400, w: 3.5, color: PAL.red });
-    for (let k = 0; k < 3; k++) ringWave(f, Ps(X[k]), at(256.05, 0.7), { R: 100, w: 3.5, color: PAIR[k] });
+    ringWave(f, m, S.cuS('slam256') / 0.9, { R: 260, w: 5, color: PAL.cream });
+    ringWave(f, m, (S.cuS('slam256') - 0.25 * S.BEAT) / 1.1, { R: 400, w: 3.5, color: PAL.red });
+    for (let k = 0; k < 3; k++) ringWave(f, Ps(X[k]), (S.cuS('slam256') - 0.05 * S.BEAT) / 0.7, { R: 100, w: 3.5, color: PAIR[k] });
   }
 }
 
@@ -508,7 +535,7 @@ add({ n0: 132.4, n1: 136.0, s: '6条边 → 外切六边形 · 空间对角线 �
 add({ n0: 136.0, n1: 140.0, s: '空间里交于一点 → 影子也[交于一点]', font: 'SM', size: 64, y: TY, ent: 'pop', hl: PAL.red });
 add({ n0: 136.4, n1: 140.0, s: 'Q 的影子 = 布列安桑点', font: 'WK', size: 56, y: CY, ent: 'pop' });
 add({ n0: 140.0, n1: 144.0, s: '[降维打击]！', size: 150, y: TY + 10, ent: 'slam', hl: PAL.red, big: 1.5 });
-add({ n0: 140.6, n1: 144.0, s: '布列安桑定理 · 证毕 ■', font: 'SM', size: 58, y: TY2 + 46, ent: 'pop', fill: PAL.ice });
+add({ n0: 141.8, n1: 144.0, s: '布列安桑定理 · 证毕 ■', font: 'SM', size: 58, y: TY2 + 46, ent: 'pop', fill: PAL.ice });
 // ⑤ Act III — why duality works: a point's line (pole / polar)
 add({ n0: 144.0, n1: 148.0, s: '可是 · [对偶]凭什么成立？', size: 88, y: TY, ent: 'pop', hl: PAL.gold });
 add({ n0: 144.5, n1: 148.0, s: '点 · 凭什么能变成线？', font: 'SM', size: 54, y: TY2 + 8, ent: 'pop', fill: PAL.cream });
@@ -566,7 +593,7 @@ add({ n0: 249.5, n1: 253.0, s: '又在腰平面上', font: 'SM', size: 58, y: TY
 add({ n0: 250.6, n1: 253.0, s: '两个平面相交 · 会交出什么？', font: 'WK', size: 56, y: CY, ent: 'pop', q: true, st: 0.02 });
 add({ n0: 253.0, n1: 256.0, s: '两个平面相交 → [一条直线]！', font: 'SM', size: 72, y: TY, ent: 'pop', hl: PAL.red });
 add({ n0: 256.0, n1: 260.0, s: '[降维打击] 2.0！', size: 140, y: TY + 10, ent: 'slam', hl: PAL.red, big: 1.5 });
-add({ n0: 256.6, n1: 260.0, s: '三点共线 · 帕斯卡定理 证毕 ■', font: 'SM', size: 56, y: TY2 + 46, ent: 'pop', fill: PAL.gold });
+add({ n0: 257.9, n1: 260.0, s: '三点共线 · 帕斯卡定理 证毕 ■', font: 'SM', size: 56, y: TY2 + 46, ent: 'pop', fill: PAL.gold });
 // ⑦ outro
 add({ n0: 260.0, n1: 264.0, s: '一座[小蛮腰] · 两个定理', size: 92, y: TY, ent: 'pop', hl: PAL.ice });
 add({ n0: 264.0, n1: 999, s: '帕斯卡 ⇄ 布列安桑', size: 96, y: TY, ent: 'draw', hl: PAL.gold });
@@ -582,6 +609,20 @@ function slotTexts() {
       if (q === o || !!q.v !== !!o.v || q.n0 <= o.n0 + 1e-6) continue;
       if (Math.abs((q.y ?? 0) - (o.y ?? 0)) < 0.55 * Math.max(q.size, o.size)) o.n1 = Math.min(o.n1, q.n0 - 0.2);
     }
+  }
+  // v5: real-time [lands, leaves] (js/cues.js CAPS). A caption without a scored exit leaves on the clock (beat n1);
+  // a caption that lands early on its note (a slam lands ON the note) first pushes out whoever holds its slot.
+  const vbeat = (o, n) => (o.v || n < S.INS0 ? n : n + S.INSD);
+  for (const o of T) {
+    const c0 = CAPS[o.s], clk = S.realT(vbeat(o, o.n1));
+    let push = Infinity;
+    for (const q of T) {
+      if (q === o || !CAPS[q.s] || !!q.v !== !!o.v || q.n0 <= o.n0 + 1e-6 || q.n0 > o.n1 + 0.3) continue;
+      if (Math.abs((q.y ?? 0) - (o.y ?? 0)) < 0.55 * Math.max(q.size, o.size)) push = Math.min(push, CAPS[q.s][0] - 0.2);
+    }
+    // every caption animates at natural speed from its landing (a hold never slows a pop-in or a drop-out)
+    o.cap = c0 ? [c0[0], Math.min(c0[1] ?? clk, push)] : [S.realT(vbeat(o, o.n0)), Math.min(clk, push)];
+    o.cap[1] = Math.max(o.cap[1], o.cap[0] + 0.3);
   }
   SLOTTED = true;
 }
@@ -626,7 +667,7 @@ function drawPicto(f, t, n) {
   opts.forEach((o, j) => {
     const an = cardAnim(t, n, o.n0, 125.6);
     if (!an) return;
-    const ko = j === 1 ? ramp(123.0, 123.3, n) : 0, win1 = j === 0 ? pulse(n, 124, 0.06, 1.6) : 0;
+    const ko = j === 1 ? ramp(123.0, 123.3, n) : 0, win1 = j === 0 ? pulse(S.cuN('slam124'), 0, 0.06, 1.6) : 0;
     const hiTri = j === 1 ? ramp(118.1, 118.6, n) * (1 - ko) : 0;
     f.save(); f.globalAlpha *= an.a * (1 - 0.45 * ko);
     f.translate(o.x, cy + an.dy); f.scale(an.s, an.s);
@@ -732,10 +773,14 @@ function drawTexts(f, t, n) {
   drawCardRows(f, t, n);
   const tS = t, nS = n;
   for (let j = 0; j < T.length; j++) {
-    const o = T[j], t = o.v ? TV : tS, n = o.v ? NV : nS;   // v-captions run on the video clock (④ insert)
+    const o = T[j], cap = o.cap;
+    let t = o.v ? TV : tS, n = o.v ? NV : nS;   // v-captions run on the video clock (④ insert)
     const exitD = 0.32;
-    if (n < o.n0 - 0.001 || n > o.n1 + exitD) continue;
     const t0 = bt(o.n0), t1 = bt(o.n1);
+    if (cap) {   // v5: [lands, leaves] in real time (js/cues.js), animated at natural speed
+      if (RT < cap[0] - 0.001 || RT > cap[1] + 0.6) continue;
+      t = RT < cap[1] ? Math.min(t0 + (RT - cap[0]) / 1.4, t1 - 1e-3) : t1 + (RT - cap[1]) / 1.4;
+    } else if (n < o.n0 - 0.001 || n > o.n1 + exitD) continue;
     const font = o.font || 'SB';
     let size = o.size;
     const m = measure(o.s, font, size), maxW = o.q ? 860 : 960;
@@ -745,7 +790,7 @@ function drawTexts(f, t, n) {
       const w = Math.min(m.w, maxW), r = clamp(0.5 * size, 28, 38), gap = 22, tot = 2 * r + gap + w;
       tx = 540 - tot / 2 + 2 * r + gap + w / 2;
       const a = clamp((t - t0) / 0.3) * (1 - clamp((t - t1) / 0.13));
-      if (a > 0.003) qBadge(f, 540 - tot / 2 + r, o.y, r, a, qRing(o), bD(t));
+      if (a > 0.003) qBadge(f, 540 - tot / 2 + r, o.y, r, a, cap && CAPS[o.s] ? clamp((RT - cap[0] - 0.3) / (cap[1] - cap[0] - 0.3)) : qRing(o), bD(t));
     }
     let anim, draw;
     if (t >= t1) anim = dropOut(t, t1, 0.13, { dist: 22, st: 0.008 });
@@ -770,7 +815,7 @@ function drawTexts(f, t, n) {
 }
 
 // ------------------------------------------------------------------ bloom + post
-function bloomAt(n) { return 0.9 + 0.3 * pulse(n, 12, 0.06, 1.2) + 0.35 * pulse(n, 32, 0.06, 1.4) + 0.1 * pulse(n, 48, 0.06, 1) + 0.3 * pulse(n, 124, 0.06, 1.2) + 0.55 * pulse(n, 140, 0.06, 2) + 0.2 * pulse(n, 184, 0.06, 1) + 0.3 * pulse(n, 208, 0.06, 1.2) + 0.55 * pulse(n, 256, 0.06, 2); }
+function bloomAt(n) { return 0.9 + 0.3 * pulse(CU(CUE.slam), 0, 0.06, 1.2) + 0.35 * pulse(S.cuN('slam32'), 0, 0.06, 1.4) + 0.1 * pulse(S.cuN('a48'), 0, 0.06, 1) + 0.3 * pulse(S.cuN('slam124'), 0, 0.06, 1.2) + 0.55 * pulse(S.cuN('slam140'), 0, 0.06, 2) + 0.2 * pulse(S.cuN('slam184'), 0, 0.06, 1) + 0.3 * pulse(S.cuN('slam208'), 0, 0.06, 1.2) + 0.55 * pulse(S.cuN('slam256'), 0, 0.06, 2); }
 function composite(fg, n) {
   const src = fg.canvas;
   const b1 = IMG.b1.getContext('2d'), b2 = IMG.b2.getContext('2d');
@@ -790,7 +835,7 @@ function composite(fg, n) {
 function post(t, n, tv) {
   c.save(); c.setTransform(dpr, 0, 0, dpr, 0, 0);
   // flashes
-  const fl = 0.02 * pulse(n, 12, 0.04, 0.5) + 0.05 * pulse(n, 32, 0.04, 0.6) + 0.015 * pulse(n, 48, 0.04, 0.5) + 0.04 * pulse(n, 124, 0.04, 0.5) + 0.14 * pulse(n, 140, 0.04, 0.9) + 0.03 * pulse(n, 184, 0.04, 0.5) + 0.05 * pulse(n, 208, 0.04, 0.6) + 0.13 * pulse(n, 256, 0.04, 0.9);   // v3 calm: soft glows, no white-outs
+  const fl = 0.02 * pulse(CU(CUE.slam), 0, 0.04, 0.5) + 0.05 * pulse(S.cuN('slam32'), 0, 0.04, 0.6) + 0.015 * pulse(S.cuN('a48'), 0, 0.04, 0.5) + 0.04 * pulse(S.cuN('slam124'), 0, 0.04, 0.5) + 0.14 * pulse(S.cuN('slam140'), 0, 0.04, 0.9) + 0.03 * pulse(S.cuN('slam184'), 0, 0.04, 0.5) + 0.05 * pulse(S.cuN('slam208'), 0, 0.04, 0.6) + 0.13 * pulse(S.cuN('slam256'), 0, 0.04, 0.9);   // v3 calm: soft glows, no white-outs
   if (fl > 0.003) { c.globalCompositeOperation = 'lighter'; c.globalAlpha = Math.min(1, fl); c.fillStyle = '#FFF1D6'; c.fillRect(0, 0, W, H); }
   // grain (re-rolled every 2 frames)
   const g = bD(t);
@@ -806,11 +851,20 @@ function post(t, n, tv) {
 }
 
 // ------------------------------------------------------------------ frame
+// v5 layout: the whole picture is scaled by KAP about the top centre so that it ends at y = PIC_H; the score strip
+// (tools/strip.py) is composited over the bottom STRIP_H px of the frame afterwards.
+export const STRIP_H = 300, PIC_H = H - STRIP_H, KAP = PIC_H / H, KX = (W * (1 - KAP)) / 2;
+// v5: after 证毕 the nocturne's coda plays on (≈ 14 s): the figure slowly leans in, then lets go as Act III begins
+function codaZoom() {
+  const z0 = CUE.qed1 + 0.5, z1 = CUE.b144 - 0.4, z2 = CUE.b144 + 2.6;
+  if (RT <= z0 || RT >= z2) return 0;
+  return E.io2(clamp((RT - z0) / (z1 - z0))) * (1 - E.io2(clamp((RT - z1) / (z2 - z1))));
+}
 let TV = 0, NV = 0, RT = 0;   // video time / video beat of the current frame (the story clock t, n stops during the ④ insert)
 export function render(tv) {
   const nv = globalThis.__NVFIX ?? S.warpNV(tv), t = S.bt(S.storyN(nv));   // (__NVFIX: tools sample a video beat directly)
   globalThis.__TV = globalThis.__BOILFIX ?? tv;   // real time: the boil keeps breathing during holds
-  globalThis.__TVB = S.bt(nv); TV = S.bt(nv); NV = nv; RT = tv;   // video-beat clock (④ insert)
+  globalThis.__TVB = S.bt(nv); TV = S.bt(nv); NV = nv; RT = tv; S.setRT(tv);   // video-beat clock (④ insert)
   const st = S.state(t, nv), n = st.n;
   BOIL.seed = bD(t); BOIL.amp = 1.05;
   const sh = shakeAt(t);
@@ -818,7 +872,10 @@ export function render(tv) {
   c.globalAlpha = 1; c.globalCompositeOperation = 'source-over';
   drawBG(c, st, sh);
   const f = LY.get(0);
+  f.setTransform(dpr * KAP, 0, 0, dpr * KAP, dpr * KX, 0);   // v5: the picture sits above the score strip (scaled about the top centre)
   f.save(); f.translate(sh[0], sh[1]);
+  const zc = 0.05 * codaZoom();
+  if (zc > 1e-4) { const B = st.bri && st.bri.B, q = B ? st.P([B[0], B[1], 0]) : [540, 900]; f.translate(q[0], q[1]); f.scale(1 + zc, 1 + zc); f.translate(-q[0], -q[1]); }
   drawFigure(f, st, t, n);
   drawImpacts(f, st, t, n);
   drawHand(f, st, t, n);

@@ -274,7 +274,7 @@ export function drawSpace(f, st, t, n, LY) {
     ringWave(f, q, at(p.cross, 0.55), { R: 70, w: 3.5, color: PCOL(p.k) });
   }
   if (dA > 0.003) { const q = P(wa(B)); ball(f, q, 11 * Math.sqrt(q[2]), BALL.red, { lit, alpha: dA, halo: 3 }); }
-  if (qRed > 0 && !flat) { const q = P(Q); ball(f, q, 12 * Math.sqrt(q[2]) * E.outBack(qRed, 2.6), BALL.red, { halo: 3.5 + 3 * pulse(n, 124, 0.05, 1.2) }); }
+  if (qRed > 0 && !flat) { const q = P(Q); ball(f, q, 12 * Math.sqrt(q[2]) * E.outBack(qRed, 2.6), BALL.red, { halo: 3.5 + 3 * pulse(S.cuN('slam124'), 0, 0.05, 1.2) }); }
   // ---------------------------------------------------------------- near sheet
   if (faces) { const lf = LY.get(2); lf.setTransform(f.getTransform()); paintFaces(lf, faces, true); blitLayer(f, lf, 0.3 * aH); }
   drawRul(rul.front, true);
@@ -392,7 +392,7 @@ export function drawSpace(f, st, t, n, LY) {
   }
   // Q glows through the glass
   if (qRed > 0 && !flat) {
-    const q = bp(P(Q)), r = 30 + 26 * pulse(n, 124, 0.05, 1.2);
+    const q = bp(P(Q)), r = 30 + 26 * pulse(S.cuN('slam124'), 0, 0.05, 1.2);
     f.save(); f.globalCompositeOperation = 'lighter';
     const g = f.createRadialGradient(q[0], q[1], 0, q[0], q[1], r);
     g.addColorStop(0, rgba('#FF8FA3', 0.35 * qRed)); g.addColorStop(1, rgba(PAL.red, 0));
