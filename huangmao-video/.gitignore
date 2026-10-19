@@ -3,9 +3,7 @@ tmp/
 node_modules/
 fonts/
 audio/
-tex/
+assets/fonts/*.ttf
 tools/__pycache__/
-assets/paper_base.jpg
-assets/paper_tooth.png
 *.mp4
 *.wav

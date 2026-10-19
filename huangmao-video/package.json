@@ -1,14 +1,15 @@
 {
   "name": "huangmao-video",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "private": true,
   "type": "module",
-  "description": "黄毛理论 · 竖屏科普短视频（1080×1920, 30 fps）— 纯代码逐帧渲染",
+  "description": "黄毛理论 v2 · 竖屏科普短视频（1080×1920, 30 fps, 55.4 s）— 扁平矢量 + 综艺花字，纯代码逐帧渲染",
   "scripts": {
     "assets": "bash tools/fetch_assets.sh",
+    "cues": "node tools/export_cues.mjs",
     "sfx": "python3 tools/sfx.py",
     "stills": "node render.mjs stills",
-    "video": "node render.mjs video --workers 3"
+    "video": "node render.mjs video --workers 2"
   },
   "dependencies": {
     "playwright": "^1.63.0"

@@ -1,273 +1,174 @@
-// 黄毛理论 · scenes B9–B16: three true stories (prow → rain ride → superbike → cart/leave slip) → same fire → what 黄毛 is NOT → 高富帅 vs anyone → CLIMAX
-import { PAL, hs, clamp, lerp, E, K, rrectPts } from './engine.js';
-import { c, B, bt, BEAT, E8, pulse, appear, ioL, slam, HL, SUB, tint, morphW, drawMorph, line } from './core.js';
-import { YEL, YELL, ORG, ORGD, GINK, GREYL, GREYM, P, mixP, person, drawFlame, flamePts } from './people.js';
-import { HULL, dense, tfm, box, disc, txt, PROW, deckY, prowDetails, water, wavesToRain, oldBike, OLD_BODY, SUPER_BODY, van, checkerFlag, cart, slip, stampZhun,
-  dyeBottle, spikyHead, brokenHeart, redX, pedestal, topHat, dice, wheel } from './props.js';
-import { puff, twinkle, speedLines } from './fx.js';
-import { mixHex, drawSeal } from './shapes.js';
-import { GROUND, DROP_GUY, colS, chestOf } from './s1.js';
+// 黄毛理论 v2 · scenes B9–B16 (everyday people light up → lineup → fate vs choice → climax)
+import { c, PAL, bg, rrFill, rr, circ, ell, fillP, strokeP, line, heart, burst, sparkle, dots, withT, alpha, shade, ring, sunburst, lin, path } from './draw.js';
+import { B, bb, BEAT } from './beat.js';
+import { clamp, lerp, hs, E, popS, ramp, pulse, K, spring, mix } from './lib.js';
+import { label, FONTS } from './type.js';
+import { person, personSide, heartMascot, LAOSHI, HUANGMAO, KID } from './char.js';
+import { stage, blobs, rays, beatP, breathe, arc, runPose, GY } from './kit.js';
+import { confetti, sparkleBurst, popLines, dust, say, floatTag, badgeFx, rain, speedLines, pill } from './fx.js';
+import { bouquet, table, boardChart, motorbike, ticket, skateboard, podium, moneyBag, die, magnifier } from './props.js';
 
-const RY = 1440;                                   // road level of the bike stories
-const PY = 150, PRW = PROW.map(([x, y, cr]) => [x, y + PY, cr]);
-let _prw = null; const PRWD = () => (_prw ||= dense(PRW, true, 4));
-const deck = (x) => deckY(x) + PY;
-const hopAt = (t, t0, d = 0.3, h = 1) => (t < t0 || t > t0 + d ? 0 : h * Math.sin(Math.PI * (t - t0) / d));
-const dropFlame = () => { const ch = chestOf(P.cheer(), DROP_GUY), s = colS(B[9]); return flamePts(ch[0], ch[1] + 40, 150 * s, 200 * s, B[9] * 2.2, 0, 1, 0); };
+export const OFFICE = { hair: 'bob', hairCol: PAL.hairB, top: PAL.purple, topStyle: 'suit', skirt: PAL.navy, bottom: PAL.navy, shoes: PAL.navy };
+export const RIDER = { hair: 'short', hairCol: PAL.hairK, top: PAL.mint, topStyle: 'jacket', inner: '#fff', bottom: '#3b3f72', shoes: PAL.navy, skin: PAL.skin2 };
+export const GRANNY = { hair: 'grandma', hairCol: PAL.hairW, glasses: true, top: PAL.pink, topStyle: 'tee', bottom: PAL.blue, shoes: '#ffffff' };
+export const GIRL = { hair: 'long', hairCol: PAL.hairB, top: PAL.mint, topStyle: 'tee', skirt: PAL.blue, bottom: PAL.blue, shoes: PAL.coral };
+export const CHEF = { hair: 'short', hairCol: PAL.hairK, top: '#ffffff', topStyle: 'apron', apron: PAL.coral, bottom: PAL.navy, skin: PAL.skin2 };
+export const UNCLE = { hair: 'old', hairCol: '#6b6a80', top: PAL.orange, topStyle: 'overall', overall: PAL.blue, bottom: PAL.blue };
+const lightUp = (t, t0) => ramp(t, t0, 0.3, 'pop');
 
-// ------------------------------------------------------------------ B9: the flame column bends into a ship's prow; "Jack" spreads his arms
-const JX = 330, JS = 0.9, JY = deck(JX) - 256 * JS;
-const shipBob = (tq) => 7 * Math.sin((tq - B[9]) * 3.4);
-function jackAt(tq) {
-  const v = ioL((tq - B[9]) / 0.4), bob = shipBob(tq);
-  if (v < 1) return { tf: { x: lerp(DROP_GUY.x, JX, v), y: lerp(DROP_GUY.y, JY + bob, v) - 230 * Math.sin(Math.PI * v), s: lerp(DROP_GUY.s, JS, v), flip: v < 0.5 ? 1 : -1 }, pose: P.jump(Math.sin(Math.PI * v)), v };
-  return { tf: { x: JX, y: JY + bob, s: JS, flip: -1 }, pose: mixP(P.stand(), P.wide(), E.outBack(clamp((tq - bt(37)) / 0.25), 1.8)), v: 1 };
-}
-export function sShip(t, tq, D) {
-  if (tq < B[9] || tq >= B[10]) return;
-  const u = E.out3(clamp((tq - B[9]) / 0.3)), bob = shipBob(tq);
-  if (u > 0.5) for (let i = 0; i < 7; i++) { // wind
-    const yy = 650 + i * 50 + 24 * hs(i, 3), L = 90 + 90 * hs(i, 4), x = ((hs(i, 5) * 1400 + (tq - B[9]) * 1150) % 1500) - 250;
-    line([[x, yy], [x + L, yy]], D, 400 + i, { w: 4, color: GINK, t0: 2, t1: 2 });
-  }
-  c.save(); c.translate(0, bob * u);
-  if (u < 1) drawMorph(morphW(dropFlame(), PRWD(), u, 'f2p'), mixHex(YEL, HULL, u), D, 410, { w: 7.5 });
-  else drawMorph(PRWD(), HULL, D, 410, { w: 7.5 });
-  c.save(); c.translate(0, PY); prowDetails(D, 412, clamp((tq - B[9] - 0.22) / 0.15)); c.restore();
-  c.restore();
-  // ticket
-  const ta = appear(tq, bt(37.5), 0.25);
-  if (ta > 0.01) {
-    c.save(); c.translate(745, 820 + bob); c.rotate(0.14 + 0.04 * Math.sin(tq * 4)); c.scale(ta, ta);
-    box(0, 0, 250, 118, 12, '#f6d7a8', D, 420, { w: 5.5 });
-    line([[-78, -44], [-78, 44]], D, 421, { w: 3, color: GINK, t0: 1, t1: 1 });
-    disc(-100, 0, 9, PAL.ink, D, 422, { w: 0 });
-    txt('三等舱', 26, 2, 54, PAL.ink, D, 423, { font: 'KL' });
-    c.restore();
-  }
-  const J = jackAt(tq);
-  const R = person(c, J.tf, J.pose, { D, k: 430, face: tq >= bt(38) ? 'shock' : 'grin', hair: 'cap', hairC: mixHex(PAL.ink, YELL, clamp(J.v * 1.6)), chest: lerp(1.15, 0.8, J.v), glow: 1 });
-  if (tq >= bt(38)) { // yell
-    const a = appear(tq, bt(38), 0.15);
-    for (let j = 0; j < 3; j++) {
-      const an = Math.PI + (j - 1) * 0.45, r0 = R.R * 1.4, r1 = r0 + 64 * a + 8 * Math.sin(tq * 30 + j);
-      line([[R.hc[0] + Math.cos(an) * r0, R.hc[1] + 8 + Math.sin(an) * r0], [R.hc[0] + Math.cos(an) * r1, R.hc[1] + 8 + Math.sin(an) * r1]], D, 440 + j, { w: 7 });
-    }
-  }
-  const wy = lerp(1960, 1450, E.out3(clamp((tq - B[9]) / 0.35)));
-  water(wy, tq * 2.4, D, 450, 1);
-  for (let j = 0; j < 3; j++) { const ph = (tq * 1.6 + j / 3) % 1; c.save(); c.globalAlpha *= (1 - ph) * u; puff(c, 330 - 90 * ph - j * 12, wy - 6 - 50 * ph, 16 + 26 * ph, D, 455 + j); c.restore(); }
-  SUB('“黄毛教父”杰克', tq, B[9] + 0.06, B[10] - 0.06, 300, { D, size: 60, seed: 80, color: tint('“黄毛教父”杰克', '黄毛', ORGD) });
-  HL('坐三等舱，', tq, bt(37), B[10] - 0.06, 415, { D, size: 108, seed: 81 });
-  HL('照样喊“世界之王”', tq, bt(38), B[10] - 0.06, 535, { D, size: 100, seed: 82 });
+// ------------------------------------------------------------------ B9 meeting: she raises her hand
+export function meet(t) {
+  stage('#c7b8ff', { deco: () => { rrFill(0, 0, 1080, 160, 0, '#b6a5f7'); } });
+  boardChart(300, 600, 420, 300, t, B[9] + 0.15);
+  rrFill(80, 760, 440, 10, 5, '#a796f0');
+  const raise = ramp(t, bb(9, 0.85), 0.25, 'pop'), look = ramp(t, bb(9, 1.25), 0.25), lit = lightUp(t, bb(9, 1.5));
+  const P1 = person({ hair: 'short', hairCol: PAL.hairK, glasses: true, top: '#8d93b8', topStyle: 'suit', tie: PAL.navy, bottom: PAL.navy, x: 210, y: 1330, h: 540, turn: lerp(0, 0.8, look), look: [lerp(0, 1, look), -0.3], eyes: look > 0.5 ? 'wide' : 'dot', mouth: look > 0.5 ? 'o' : 'flat', armL: [10, 4], armR: [10, 4], sy: breathe(t, 0.4) }, t);
+  const P3 = person({ hair: 'slick', hairCol: '#3a2a22', top: PAL.navy, topStyle: 'suit', tie: PAL.coral, bottom: PAL.navy, x: 870, y: 1330, h: 560, turn: lerp(0, -0.8, look), look: [lerp(0, -1, look), -0.3], eyes: look > 0.5 ? 'wide' : 'dot', mouth: look > 0.5 ? 'o' : 'flat', brows: look > 0.5 ? 'up' : 'none', armL: [10, 4], armR: [10, 4], sy: breathe(t, 2.1) }, t);
+  const J = person({ ...OFFICE, x: 540, y: 1330, h: 560, eyes: 'dot', mouth: raise > 0.5 ? 'open' : 'flat', brows: raise > 0.5 ? 'up' : 'none', armR: [lerp(10, 168, raise), lerp(4, 4, raise)], armL: [10, 4], sy: breathe(t) * (1 + 0.04 * pulse(t, bb(9, 0.85), 8)), badge: lit, badgeS: 1.15 }, t);
+  table(540, 1050, 1040);
+  rrFill(140, 1000, 120, 60, 10, '#ffffff'); rrFill(820, 1004, 110, 56, 10, '#ffffff'); // papers
+  say(t, bb(9, 0.95), 99, 760, 560, '我有个想法！', J.handR[0] + 10, J.handR[1] + 40, { size: 60, col: PAL.yel, rot: 0.2 });
+  popLines(t, bb(9, 0.9), J.handR[0], J.handR[1] - 20, 70, { n: 5 });
+  if (lit > 0) badgeFx(t, bb(9, 1.5), J.chest[0], J.chest[1], 1.1);
 }
 
-// ------------------------------------------------------------------ B10: waves tear into rain; prow → TV van; the apprentice chases it on an old bike
-const VAN_BODY = [[-210, -40, 1], [-210, -226, 1], [118, -226, 1], [196, -150], [214, -40, 1]];
-const RIDE = { hip: [0, 0], lean: 0.5, legs: [{ t: 1.2, k: 1.5, f: 0.2 }, { t: 1.1, k: 1.45, f: 0.2 }], arms: [{ t: 0.95, k: -0.4 }, { t: 0.85, k: -0.3 }], head: -0.3, face: 'grin' };
-const BS = 1.1;
-const vanX = (tq) => 800 + 12 * Math.sin(tq * 3.1) + (tq > B[11] ? 760 * E.in2(clamp((tq - B[11]) / 0.42)) : 0);
-const bikeX = (tq) => lerp(-320, 250, E.out3(clamp((tq - B[10]) / 0.4))) + 110 * clamp((tq - B[10]) / (B[11] - B[10]));
-const seatOf = (bx, by) => ({ x: bx - 60, y: by - 196, s: 0.8, flip: 1 });
-function road(tq, D, a = 1) {
-  if (a > 0) line([[540 - 640 * a, RY], [540 + 640 * a, RY]], D, 500, { w: 8 });
-  for (let i = 0; i < 6; i++) { const x = 1160 - (((tq - B[10]) * 950 + i * 220) % 1320); line([[x, RY + 34], [x + 70, RY + 34]], D, 502 + i, { w: 5, color: GINK, t0: 2, t1: 2 }); }
-}
-export function sBike(t, tq, D) {
-  if (tq < B[10] || tq >= B[11]) return;
-  const u = E.out3(clamp((tq - B[10]) / 0.32)), ur = clamp((tq - B[10]) / 0.6);
-  water(1450 + 260 * ur, tq * 2.4, D, 450, 1 - ur);
-  road(tq, D, E.out2(clamp((tq - B[10] - 0.1) / 0.3)));
-  const vx = vanX(tq);
-  if (u < 1) drawMorph(morphW(PRWD(), tfm(dense(VAN_BODY, true, 3), vx, RY, 1), u, 'p2v'), mixHex(HULL, PAL.hi, u), D, 510, { w: 7 });
-  const va = clamp((u - 0.75) / 0.25);
-  if (va > 0) { c.save(); c.globalAlpha *= va; van(vx, RY, 1, D, 512, { spin: tq * 12 }); c.restore(); }
-  const bx = bikeX(tq), bump = 18 * hopAt(tq, bt(41), 0.22);
-  if (tq >= bt(41) + 0.18) { c.save(); c.globalAlpha *= 0.9; for (const [ox, k] of [[-121, 521], [121, 522]]) { const v = (tq - bt(41) - 0.18) / 0.4; if (v < 1) puff(c, bx + ox - 40 * v, RY - 6 - 20 * v, 14 + 22 * v, D, k, { fill: '#cfe6f5' }); } c.restore(); }
-  oldBike(bx, RY - bump, BS, tq * 14, D, 520, { color: PAL.blue });
-  const w = ioL((tq - B[10]) / 0.38), J = jackAt(B[10] - 0.001), seat = seatOf(bx, RY - bump);
-  const tf = w < 1 ? { x: lerp(J.tf.x, seat.x, w), y: lerp(J.tf.y, seat.y, w) - 140 * Math.sin(Math.PI * w), s: lerp(J.tf.s, seat.s, w), flip: w < 0.5 ? -1 : 1 } : seat;
-  const R = person(c, tf, w < 1 ? mixP(P.wide(), RIDE, w) : RIDE, { D, k: 530, face: 'grin', hair: 'cap', hairC: w < 0.5 ? YELL : PAL.ink, chest: 0.8, glow: 0.9 });
-  if (w > 0.3 && w < 0.98) { const pv = (w - 0.3) / 0.68; c.save(); c.globalAlpha *= 1 - pv; puff(c, R.hc[0], R.hc[1], 50 + 50 * pv, D, 535); c.restore(); }
-  wavesToRain(tq - B[10], 1450, ur, D, 540);
-  if (tq >= bt(42) && tq < bt(42) + 0.22) {
-    const bolt = [[968, 600, 1], [905, 720, 1], [980, 760, 1], [902, 920, 1]];
-    line(bolt, D, 545, { w: 20, color: PAL.ink, t0: 4, t1: 14 }); line(bolt, D, 546, { w: 10, color: YEL, t0: 3, t1: 10 });
-  }
-  const fl = pulse(tq, bt(42), 11);
-  if (tq >= bt(42) && fl > 0.02) { c.save(); c.globalAlpha = 0.45 * fl; c.fillStyle = PAL.hi; c.fillRect(-300, -300, 1680, 2520); c.restore(); }
-  HL('19岁修车学徒，', tq, B[10] + 0.06, B[11] - 0.06, 320, { D, size: 104, seed: 84 });
-  HL('冒雨骑100多公里', tq, bt(41), B[11] - 0.06, 440, { D, size: 104, seed: 85, color: tint('冒雨骑100多公里', '100', YEL) });
-  SUB('追电视台摄制组，求一个上节目的机会', tq, bt(42), B[11] - 0.06, 552, { D, size: 48, seed: 86 });
+// ------------------------------------------------------------------ B10 ride: chase the chance through dusk rain
+export function ride(t) {
+  const lt = t - B[10];
+  c.fillStyle = lin(0, 0, 0, 1250, [[0, '#3a2e8f'], [0.55, '#c9608f'], [1, '#ff9f6b']]); c.fillRect(-50, -50, 1180, 1400);
+  circ(760, 1150, 170, PAL.coral2);
+  // city silhouette (parallax)
+  for (let i = 0; i < 12; i++) { const w = 120 + 60 * hs(i, 3), h = 160 + 260 * hs(i, 4); const x = ((i * 150 - lt * 140) % 1800 + 1800) % 1800 - 300; rrFill(x, 1180 - h, w, h + 10, 8, i % 2 ? '#4b3a8f' : '#5a4399'); }
+  rain(t, -100, 0, 1300, 1250, 46, { a: 0.3 });
+  // road
+  rrFill(-100, 1180, 1300, 800, 0, '#2b2a55'); rrFill(-100, 1180, 1300, 14, 0, '#3d3b70');
+  for (let i = 0; i < 8; i++) { const x = ((i * 260 - lt * 1500) % 2080 + 2080) % 2080 - 300; rrFill(x, 1360, 150, 16, 8, '#ffffff'); }
+  speedLines(t, -100, 700, 1300, 520, 12, { a: 0.35, spd: 2600 });
+  const grab = bb(10, 2.15), got = t >= grab;
+  const bx = K(t, [[B[10], 360], [grab, 560, 'io2'], [B[11] + 0.5, 600, 'out2']]);
+  const by = 1250 - 4 * Math.abs(Math.sin(t * 15));
+  const M = motorbike(bx, by, 1.15, t, { col: PAL.coral });
+  const lit = lightUp(t, grab + 0.2);
+  const reach = ramp(t, grab - 0.35, 0.3, 'io2');
+  const o = { ...RIDER, view: 'side', dir: 1, hat: 'helmet', hatCol: PAL.yel === PAL.yel ? '#ffffff' : '#fff', h: 430, lean: 22, legF: [95, 95], legB: [80, 95], armF: [lerp(75, 150, reach), lerp(-10, 0, reach)], armB: [70, -10], eyes: 'dot', mouth: got ? 'grin' : 'flat', badge: lit };
+  const s = 4.3; o.x = M.seat[0] + 10; o.y = M.seat[1] + 44 * s;
+  const R = person(o, t);
+  // the chance (flying ticket) ahead
+  const tx = got ? R.hand[0] + 10 : K(t, [[B[10], 930], [grab, 820, 'io2']]);
+  const ty = got ? R.hand[1] - 20 : 720 + 30 * Math.sin(t * 4);
+  ticket(tx, ty, got ? 0.95 : 1.1, t, '机会');
+  if (got) { sparkleBurst(t, grab, tx, ty, 110, { n: 8 }); }
 }
 
-// ------------------------------------------------------------------ B11: old bike → superbike, 2006 → 2026, flag, 冠军 seal.  B12: wheel → cart → leave slip → 准
-const L0 = bt(46) - 0.25;
-const superX = (tq) => 360 + (tq < L0 ? 2.5 * Math.sin(tq * 70) : 1500 * E.in2(clamp((tq - L0) / 0.4)));
-let _ob = null, _sb = null; const OBD = () => (_ob ||= dense(OLD_BODY)), SBD = () => (_sb ||= dense(SUPER_BODY));
-const BASKET = [[-160, -250, 1], [160, -250, 1], [126, -112, 1], [-126, -112, 1]];
-const CX = 640, CS = 1.15, SLIP = { x: 640, y: 1000, s: 0.92 };
-export function sCart(t, tq, D) {
-  if (tq >= B[11] && tq < B[12]) champ(tq, D);
-  else if (tq >= B[12] && tq < B[13]) leave(tq, D);
-}
-function champ(tq, D) {
-  const u = tq - B[11];
-  const ra = 1 - clamp(u / 0.3);
-  if (ra > 0) { c.save(); c.globalAlpha *= ra; wavesToRain(tq - B[10], 1450, 1, D, 540); c.restore(); }
-  road(tq, D, 1);
-  const vx = vanX(tq); if (vx < 1350) van(vx, RY, 1, D, 512, { spin: tq * 16 });
-  const fa = appear(tq, bt(45.5), 0.3);
-  if (fa > 0.01) { c.save(); c.translate(860, RY); c.scale(1, fa); c.translate(-860, -RY); checkerFlag(860, RY, 0.85, tq, D, 560); c.restore(); }
-  // calendar 2006 → 2026
-  const ca = appear(tq, B[11] + 0.08, 0.3);
-  if (ca > 0.01) {
-    const yr = Math.round(lerp(2006, 2026, E.io2(clamp((tq - bt(44.5)) / (bt(45.75) - bt(44.5))))));
-    const tick = tq > bt(44.5) && tq < bt(45.8) ? 0.06 * Math.sin(tq * 60) : 0;
-    c.save(); c.translate(560, 790); c.scale(ca * (1 + 0.12 * pulse(tq, bt(45.75), 8)), ca); c.rotate(0.03 + tick);
-    box(0, 0, 340, 250, 16, PAL.hi, D, 570, { w: 6.5 });
-    box(0, -98, 340, 54, 10, '#e5402b', D, 571, { w: 5 });
-    for (const x of [-110, 110]) line([[x, -140], [x, -108]], D, 572 + x, { w: 7 });
-    txt(String(yr), 0, 34, 116, yr === 2026 ? ORGD : PAL.ink, D, 575, { font: 'KL' });
-    c.restore();
-  }
-  // superbike (riderless: he built it)
-  const sp = E.io2(clamp(u / 0.35)), sx = superX(tq);
-  if (sx < 1450) {
-    if (tq > L0 + 0.1) for (let j = 0; j < 4; j++) line([[sx - 240 - j * 26, RY - 60 - j * 46], [sx - 420 - j * 26, RY - 60 - j * 46]], D, 580 + j, { w: 6, t0: 10, t1: 2 });
-    oldBike(sx, RY, BS, tq * (tq > L0 ? 40 : 18), D, 520, { morph: sp, body: sp <= 0 ? undefined : sp >= 1 ? SBD() : morphW(OBD(), SBD(), sp, 'o2s'), color: PAL.blue });
-  }
-  if (u < 0.3) { c.save(); c.globalAlpha *= 1 - u / 0.3; puff(c, 360, RY - 180, 60 + 120 * u, D, 586); c.restore(); }
-  // the apprentice hops off and cheers at the line
-  const hv = ioL(u / 0.4), seat = seatOf(360, RY), st = { x: 170, y: RY - 256 * 0.85, s: 0.85, flip: 1 };
-  const tf = hv < 1 ? { x: lerp(seat.x, st.x, hv), y: lerp(seat.y, st.y, hv) - 170 * Math.sin(Math.PI * hv), s: lerp(0.8, 0.85, hv), flip: 1 } : { ...st, y: st.y - 60 * hopAt(tq, bt(46), 0.35) - 40 * hopAt(tq, bt(47), 0.3) };
-  const pose = hv < 1 ? mixP(RIDE, P.jump(Math.sin(Math.PI * hv)), Math.min(1, hv * 2)) : mixP(P.akimbo(), P.cheer(), tq >= bt(46) ? E.outBack(clamp((tq - bt(46)) / 0.25), 1.6) : 0);
-  person(c, tf, pose, { D, k: 530, face: 'grin', hair: 'cap', hairC: PAL.ink, chest: 0.8, glow: 0.9 });
-  const ss = slam(tq, bt(47));
-  if (ss > 0) drawSeal(c, 610, 1110, ss * 1.25, '冠军', D, 590, { r: -0.1 });
-  HL('20年后，他造的摩托', tq, B[11] + 0.06, B[12] - 0.06, 320, { D, size: 98, seed: 88, color: tint('20年后，他造的摩托', '20', YEL) });
-  HL('在世界赛上夺冠', tq, bt(46), B[12] - 0.06, 445, { D, size: 120, seed: 89, color: tint('在世界赛上夺冠', '夺冠', YEL) });
-}
-function leave(tq, D) {
-  const u = tq - B[12];
-  line([[-80, RY], [1160, RY]], D, 500, { w: 8 });
-  const rollU = E.out3(clamp(u / 0.42)), mU = E.io2(clamp((u - 0.36) / 0.24)), sU = E.io2(clamp((tq - bt(49)) / 0.28));
-  const BK = tfm(dense(BASKET, true, 3), CX, RY, CS);
-  if (mU <= 0) {
-    const wx = lerp(1220, CX, rollU);
-    wheel(wx, RY - 74, 74, -(wx - CX) / 74, D, 600, { hub: GREYL });
-  } else if (sU <= 0) {
-    if (mU < 1) drawMorph(morphW(dense([[CX - 74, RY - 74, 0], [CX, RY - 148, 0], [CX + 74, RY - 74, 0], [CX, RY, 0]], true, 4), BK, mU, 'w2c'), mixHex(PAL.ink, '#cfe7f7', mU), D, 602, { w: 7 });
-    else cart(CX, RY, CS, D, 604, { spin: 0 });
-  } else {
-    const SR = rrectPts(SLIP.x - 300 * SLIP.s, SLIP.y - 200 * SLIP.s, 600 * SLIP.s, 400 * SLIP.s, 18, 4);
-    if (sU < 1) drawMorph(morphW(BK, SR, sU, 'c2s'), mixHex('#cfe7f7', PAL.hi, sU), D, 606, { w: 7 });
-    const a = clamp((sU - 0.6) / 0.4);
-    if (a > 0) { c.save(); c.globalAlpha *= a; slip(SLIP.x, SLIP.y, SLIP.s, D, 608, { r: 0 }); c.restore(); }
-  }
-  if (mU >= 1 && u < 0.75) { const v = (u - 0.6) / 0.15; if (v > 0 && v < 1) { c.save(); c.globalAlpha *= 1 - v; puff(c, CX, RY - 180, 80 + 90 * v, D, 609); c.restore(); } }
-  // the supermarket boss (grey hair) pops in; stamps it
-  const ba = appear(tq, bt(48.5), 0.3);
-  if (ba > 0.01) {
-    const pt = tq >= bt(50.5) ? E.outBack(clamp((tq - bt(50.5)) / 0.2), 1.6) : 0;
-    person(c, { x: 190, y: RY - 256 * 0.9 + (1 - Math.min(1, ba)) * 90, s: 0.9, flip: 1 }, mixP(P.akimbo(), P.draw(), pt), { D, k: 610, face: 'grin', hair: 'cap', hairC: GREYL, chest: 0.8, glow: 0.9, alpha: clamp(ba * 2) });
-  }
-  const ss = slam(tq, bt(50.5));
-  if (ss > 0) stampZhun(800, 1085, ss, D, 620, { r: -0.22 });
-  HL('开超市的老板，', tq, B[12] + 0.06, B[13] - 0.06, 320, { D, size: 108, seed: 90 });
-  HL('给员工放“不开心假”', tq, bt(49), B[13] - 0.06, 440, { D, size: 96, seed: 91, color: tint('给员工放“不开心假”', '不开心', YEL) });
-  SUB('管理层不能不批', tq, bt(50), B[13] - 0.06, 552, { D, size: 58, seed: 92 });
+// ------------------------------------------------------------------ B11 love: say it directly
+export function love(t) {
+  stage(PAL.pink, { deco: () => { for (let i = 0; i < 7; i++) { const x = hs(i, 2) * 1080, y = 300 + ((hs(i, 3) * 900 - (t - B[11]) * 60) % 900 + 900) % 900; alpha(0.35, () => heart(x, y, 30 + 30 * hs(i, 4), '#ffc4d8')); } } });
+  const step = ramp(t, bb(11, 0.7), 0.3, 'pop'), lit = lightUp(t, bb(11, 1.05)), blush = ramp(t, bb(11, 1.5), 0.3);
+  const J = person({ ...LAOSHI, x: lerp(300, 350, step), y: GY, h: 580, hunch: lerp(0.5, 0, step), lean: lerp(0, 6, step), turn: 0.6, look: [1, 0], eyes: 'dot', mouth: step > 0.5 ? 'open' : 'flat', brows: 'up', blush: 1.2, armR: [lerp(30, 78, step), lerp(40, 10, step)], armL: [12, 6], badge: lit, badgeS: 1.15, sy: breathe(t) }, t);
+  bouquet(J.handR[0] + 20, J.handR[1] - 10, 1.35, t, { r: lerp(-0.1, 0.4, step) });
+  const G = person({ ...GIRL, x: 790, y: GY, h: 560, turn: -0.6, look: [-1, 0], eyes: blush > 0.5 ? 'happy' : 'wide', mouth: blush > 0.5 ? 'smile' : 'o', blush: 0.8 + 1.4 * blush, armL: [12, 6], armR: [lerp(12, 40, blush), lerp(6, -100, blush)], armsFront: 'R', sy: breathe(t, 1.2), headTilt: -6 * blush }, t);
+  say(t, bb(11, 0.8), 99, 380, 560, '我喜欢你！', J.head[0] + 30, J.head[1] - 90, { size: 62, col: PAL.yel, rot: -0.2 });
+  if (lit > 0) badgeFx(t, bb(11, 1.05), J.chest[0], J.chest[1], 1.1);
+  for (let i = 0; i < 4; i++) { const t0 = bb(11, 1.6 + i * 0.35), u = clamp((t - t0) / 1.2); if (u > 0 && u < 1) alpha(1 - u, () => heart(G.head[0] + (i % 2 ? 60 : -50) + Math.sin(u * 6 + i) * 20, G.head[1] - 110 - u * 220, 26 * popS(t, t0, 0.25), PAL.coral, { hi: 'rgba(255,255,255,0.6)' })); }
 }
 
-// ------------------------------------------------------------------ B13: three people, three hair colours, one fire
-const TRIO = [{ x: 220, hair: YELL, pose: () => P.wide(), k: 630 }, { x: 540, hair: PAL.ink, pose: () => P.akimbo(), k: 650 }, { x: 860, hair: GREYL, pose: () => P.stand({ face: 'happy' }), k: 670 }];
-const TS = 0.86, TY = GROUND - 256 * TS, MERGE = [540, 860];
-export function sThree(t, tq, D) {
-  if (tq < B[13] || tq >= B[14]) return;
-  const u = tq - B[13];
-  if (u < 0.3) { const v = E.in2(u / 0.3); slip(lerp(SLIP.x, 980, v), lerp(SLIP.y, 420, v), SLIP.s * (1 - v), D, 608, { r: v * 0.9 }); stampZhun(lerp(800, 1060, v), lerp(1085, 520, v), 1 - v, D, 620, { r: -0.22 + v }); }
-  const fly = E.io2(clamp((tq - bt(54)) / (bt(55) - bt(54))));
-  const chs = [];
-  TRIO.forEach((m, i) => {
-    const a = appear(tq, B[13] + 0.04 + i * 0.1, 0.3);
-    if (a <= 0.01) return;
-    const hop = 28 * hopAt(tq, bt(53) + i * E8, 0.24);
-    const R = person(c, { x: m.x, y: TY + (1 - Math.min(1, a)) * 170 - hop, s: TS, flip: i === 2 ? -1 : 1 }, m.pose(), { D, k: m.k, face: 'grin', hair: 'cap', hairC: m.hair, chest: fly > 0 ? lerp(1, 0.3, fly) : 1, glow: 1, alpha: clamp(a * 2) });
-    chs.push(R.ch);
-    const tw = bt(53) + i * E8, sp = pulse(tq, tw, 5);
-    if (tq >= tw && sp > 0.08) twinkle(c, R.hc[0] + (i === 2 ? -78 : 78), R.hc[1] - 62, 12 + 26 * sp, D, m.k + 9, YEL);
+// ------------------------------------------------------------------ B12 skate: sixty and learning
+export function skate(t) {
+  const lt = t - B[12];
+  const spd = lerp(300, 900, ramp(t, bb(12, 1.4), 0.6));
+  const off = lt * 300 + Math.max(0, lt - (bb(12, 1.4) - B[12])) * 600;
+  bg(PAL.mint);
+  for (let i = 0; i < 6; i++) { const x = ((i * 330 - off * 0.5) % 1980 + 1980) % 1980 - 300; rrFill(x + 40, 760, 22, 500, 11, '#1fb886'); circ(x + 51, 720, 130 + 30 * hs(i, 2), i % 2 ? '#1fc98f' : '#5cf0bd'); }
+  rrFill(-200, GY, 1480, 800, 0, PAL.cream); rrFill(-200, GY, 1480, 18, 0, '#ead9bb');
+  for (let i = 0; i < 7; i++) { const x = ((i * 300 - off) % 2100 + 2100) % 2100 - 300; rrFill(x, GY + 120, 120, 12, 6, '#ead9bb'); }
+  const bal = ramp(t, bb(12, 1.4), 0.35, 'pop'), lit = lightUp(t, bb(12, 1.65));
+  const wob = (1 - bal) * Math.sin(lt * 14), x = 500;
+  const by = GY - 18, br = (1 - bal) * 0.06 * Math.sin(lt * 14);
+  skateboard(x, by, 1.25, br);
+  const o = { ...GRANNY, view: 'side', dir: 1, hat: 'helmet', hatCol: PAL.coral, h: 520, x, y: by - 38, rot: wob * 0.06,
+    legF: [lerp(14 + 10 * wob, 18, bal), lerp(18, 26, bal)], legB: [lerp(-14 - 10 * wob, -18, bal), lerp(18, 26, bal)],
+    armF: [lerp(120 + 40 * Math.sin(lt * 16), 90, bal), lerp(40, 0, bal)], armB: [lerp(-120 - 40 * Math.sin(lt * 16 + 1), -90, bal), lerp(40, 0, bal)],
+    lean: lerp(-4, 8, bal), eyes: bal > 0.5 ? 'happy' : 'dot', mouth: bal > 0.5 ? 'grin' : 'open', glasses: true, badge: lit };
+  const P = person(o, t);
+  if (bal > 0.5) speedLines(t, -100, 820, 400, 420, 8, { a: 0.5, col: '#ffffff', spd: 2200 });
+  if (lit > 0) sparkleBurst(t, bb(12, 1.65), x + 20, by - 300, 90, { n: 8 });
+  if (bal < 0.5) { c.save(); c.translate(x + 110, by - 480); const s = 1 - bal * 2; c.scale(s, s); c.beginPath(); c.moveTo(0, -24); c.quadraticCurveTo(17, 1, 0, 15); c.quadraticCurveTo(-17, 1, 0, -24); c.fillStyle = '#7fd3ff'; c.fill(); c.restore(); }
+  dust(t, bb(12, 1.4), x - 140, GY - 10, 7, { w: 60 });
+  pill(x + 30, by - 640 + 6 * Math.sin(lt * 5), '60岁', popS(t, bb(12, 0.25), 0.3), { size: 50, rot: -0.06 });
+}
+
+// ------------------------------------------------------------------ B13 lineup: none of them has yellow hair
+export function lineup(t) {
+  stage(PAL.blue, { deco: () => rays(540, 700, t, 'rgba(255,255,255,0.06)', 18, 0.1) });
+  const cast = [[OFFICE, 175, 520], [RIDER, 405, 540], [LAOSHI, 645, 560], [GRANNY, 880, 500]];
+  const mx = K(t, [[bb(13, 0.3), -120], [bb(13, 3.1), 1200, 'io2']]);
+  const heads = [];
+  cast.forEach(([P, x, h], i) => {
+    const pass = t > bb(13, 0.3) && mx > x;
+    const tp = bb(13, 0.3) + (x + 120) / 1320 * (bb(13, 3.1) - bb(13, 0.3));
+    const J = person({ ...P, x, y: GY, h, eyes: pass ? 'happy' : 'dot', mouth: pass ? 'grin' : 'smile', armL: [12, 6], armR: [12, 6], badge: 1, badgeGlow: 0.6 + 0.6 * pulse(t, tp, 3), jump: arc(t, tp, tp + 0.3, 30), sy: breathe(t, i) }, t);
+    heads.push(J.head);
+    sparkleBurst(t, tp, J.chest[0], J.chest[1], 60, { n: 6, s: 16 });
   });
-  if (fly > 0 && chs.length === 3) {
-    if (fly < 1) chs.forEach((p, i) => drawFlame(c, lerp(p[0], MERGE[0], fly), lerp(p[1] + 46, MERGE[1], fly) - 130 * Math.sin(Math.PI * fly), lerp(0.53, 0.9, fly), D, 690 + i * 2, { ph: tq * 2 + i, glow: 1 }));
-    else drawFlame(c, MERGE[0], MERGE[1], 1.5 * (1 + 0.12 * pulse(tq, bt(55), 7)), D, 698, { ph: tq * 2.2, glow: 1.5 });
-  }
-  HL('发色不一样，', tq, B[13] + 0.06, B[14] - 0.06, 320, { D, size: 112, seed: 94 });
-  HL('火是同一把', tq, bt(54), B[14] - 0.06, 450, { D, size: 130, seed: 95, color: tint('火是同一把', '火', ORG) });
+  const my = 735 + 18 * Math.sin((t - B[13]) * 6);
+  if (t > bb(13, 0.25) && t < bb(13, 3.2)) magnifier(mx, my, 100, 1);
 }
 
-// ------------------------------------------------------------------ B14: 黄毛 ≠ dyed hair ≠ rebel ≠ player (red X on the beats)
-const ICONS = [[200, '染发'], [540, '叛逆'], [880, '渣']], IY = 1010;
-export function sNot(t, tq, D) {
-  if (tq < B[14] || tq >= B[15] + 0.4) return;
-  const u = tq - B[14];
-  if (u < 0.22) drawFlame(c, MERGE[0], MERGE[1], 1.5 * (1 - E.in2(u / 0.22)), D, 698, { ph: tq * 2.2, glow: 1.2 });
-  ICONS.forEach(([x, label], i) => {
-    const a = appear(tq, B[14] + 0.08 + i * 0.08, 0.32);
-    if (a <= 0.01) return;
-    const fall = tq > B[15] ? E.in2(clamp((tq - B[15] - i * 0.04) / 0.35)) : 0;
-    const ca = clamp(a), px = lerp(540, x, ca), py = lerp(860, IY, ca) + 950 * fall;
-    const xt = bt(57 + i), hit = tq >= xt;
-    const sh = hit ? 12 * Math.sin((tq - xt) * 50) * Math.exp(-(tq - xt) * 9) : 0;
-    c.save(); c.translate(px + sh, py); c.rotate(fall * 1.4 * (i - 1)); c.scale(a, a);
-    if (hit) c.globalAlpha *= lerp(1, 0.6, clamp((tq - xt) / 0.25));
-    if (i === 0) dyeBottle(0, 20, 1.15, D, 700);
-    else if (i === 1) spikyHead(0, 30, 1.0, D, 710, tq * 6);
-    else brokenHeart(0, -10, 108, hit ? 8 + 14 * clamp((tq - xt) / 0.2) : 5, D, 720);
-    txt(label, 0, 205, 88, PAL.ink, D, 730 + i, { font: 'KL' });
-    c.restore();
-    if (hit) redX(px, py + 20, 125, clamp((tq - xt) / 0.18), D, 740 + i * 3);
+// ------------------------------------------------------------------ B14–B15 fate vs choice; spotlight swings, push into the badge
+export function fate(t) {
+  const swing = ramp(t, bb(15, 0.0), 0.5, 'io3');
+  const zoom = ramp(t, bb(15, 0.6), B[16] - bb(15, 0.6), 'in3');
+  const fx = 790, fy = GY - 0.585 * 560; // focus: the ordinary guy's badge
+  c.save();
+  const Z = 1 + 5.5 * zoom;
+  c.translate(fx, fy); c.scale(Z, Z); c.translate(-fx, -fy);
+  bg('#231f5c');
+  stars(t);
+  rrFill(-200, GY, 1480, 800, 0, '#2f2a73');
+  // spotlight cones
+  const cone = (x, a) => { if (a <= 0) return; c.save(); c.globalAlpha *= a; c.fillStyle = lin(0, 0, 0, GY, [[0, 'rgba(255,248,220,0.0)'], [1, 'rgba(255,248,220,0.38)']]); c.beginPath(); c.moveTo(x - 60, -50); c.lineTo(x + 60, -50); c.lineTo(x + 300, GY + 60); c.lineTo(x - 300, GY + 60); c.closePath(); c.fill(); ell(x, GY + 40, 300, 50, 'rgba(255,248,220,0.35)'); c.restore(); };
+  cone(360, 1 - swing); cone(fx, swing);
+  // podium + 高富帅
+  alpha(1 - 0.55 * swing, () => {
+    podium(360, 1040, 330, 220, '高富帅', PAL.purple);
+    person({ hair: 'slick', hairCol: '#2a1e18', hat: 'top', shades: true, top: PAL.navy, topStyle: 'suit', tie: PAL.coral, bottom: PAL.navy, shoes: '#000', x: 360, y: 1040, h: 600, sy: 1.08, eyes: 'cool', mouth: 'smirk', armL: [12, 6], armR: [30, 40] }, t);
+    moneyBag(470, 1000, 0.9);
+    for (let i = 0; i < 3; i++) sparkle(360 + [-150, 140, 120][i], 520 + [40, -20, 200][i], 26 * (0.7 + 0.3 * Math.sin(t * 6 + i * 2)), '#ffffff', t);
   });
-  if (tq < B[15]) HL('但黄毛 ≠', tq, B[14] + 0.06, B[15] - 0.06, 330, { D, size: 140, seed: 96, color: tint('但黄毛 ≠', '黄毛', YEL) });
-}
-
-// ------------------------------------------------------------------ B15: 高富帅 on a pedestal (+ dice 命), boxed-in crowd with flickering chest flames. B16 CLIMAX: everyone ignites
-const CROWD = [70, 185, 300, 780, 895, 1010], CSc = 0.55, CYc = GROUND - 256 * CSc;
-const PX = 540, PW = 360, PHt = 380, PTOP = 1110;
-const podTop = (tq) => lerp(GROUND + 30, PTOP, E.outBack(clamp((tq - B[15]) / 0.38), 1.4)) + (GROUND + 60 - PTOP) * E.in2(clamp((tq - B[16] - 0.1) / 0.6));
-function flick(tq) { let p = 0; for (let n = 62; n < 63; n += 0.5) p = Math.max(p, pulse(tq, bt(n), 12)); for (let n = 63; n < 64; n += 0.25) p = Math.max(p, pulse(tq, bt(n), 15)); return p; }
-export function sPodium(t, tq, D) {
-  if (tq < B[15] || tq >= B[17]) return;
-  const climax = tq >= B[16], u16 = tq - B[16];
-  const yT = podTop(tq), HS = 0.78, gy = yT - 256 * HS + 4;
-  c.save(); c.beginPath(); c.rect(-300, -300, 1680, GROUND + 304); c.clip();
-  pedestal(PX, yT, PW, PHt, D, 760);
-  const sh = climax ? E.out2(clamp(u16 / 0.15)) : 0;
-  person(c, { x: 470, y: gy, s: HS, flip: 1 }, climax ? mixP(P.akimbo(), P.shout(), sh) : P.akimbo({ head: -0.15 }), { D, k: 770, face: climax ? 'shock' : 'wink', hair: 'cap', hairC: PAL.ink, hat: climax ? null : topHat });
-  if (tq >= bt(61)) {
-    const dv = clamp((tq - bt(61)) / 0.5), bounce = Math.abs(Math.sin(Math.PI * 2.2 * dv)) * (1 - dv) * 170;
-    dice(lerp(1180, 652, E.out2(dv)), yT - 66 - bounce, 0.88, (1 - E.out2(dv)) * 9, D, 780, { str: '命' });
+  // the die of fate
+  const d0 = bb(14, 0.55), d1 = bb(14, 1.55);
+  if (t > d0) {
+    const u = clamp((t - d0) / (d1 - d0));
+    const x = lerp(1250, 800, E.out3(u)), y = GY - 100 - Math.abs(Math.sin(u * Math.PI * 2.5)) * 240 * (1 - u);
+    const r = (1 - E.out3(u)) * 9;
+    alpha(1 - swing, () => die(x, y, 1.05, r, u > 0.85 ? '命' : (Math.floor(u * 9) % 2 ? null : '命')));
+    if (u >= 1) popLines(t, d1, 800, GY - 200, 130, { n: 6, col: '#ffffff' });
+  }
+  // the ordinary guy (enters with the swing)
+  const enter = ramp(t, bb(14, 3.2), 0.5, 'out3');
+  if (enter > 0) {
+    const glow = ramp(t, bb(15, 0.4), 0.4);
+    person({ ...LAOSHI, x: fx, y: GY, h: 560, hunch: lerp(0.4, 0, glow), eyes: glow > 0.5 ? 'happy' : 'dot', mouth: 'smile', armL: [12, 6], armR: [12, 6], badge: 0.6 + 0.6 * glow, badgeGlow: 0.6 + 0.8 * glow + 0.3 * beatP(t), sy: breathe(t), turn: lerp(-0.4, 0, glow) }, t);
+    if (glow > 0) for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2 + t * 0.8; sparkle(fx + Math.cos(a) * 60 * (1 + zoom), fy + Math.sin(a) * 60 * (1 + zoom), 9 * glow, PAL.yel, t * 2); }
   }
   c.restore();
-  if (climax && u16 < 0.9) { const v = u16 / 0.9; topHat(c, [470 + 260 * v, gy - 230 * HS - 700 * v + 900 * v * v], 58 * HS, 4 * v, D); }
-  CROWD.forEach((x, i) => {
-    const a = appear(tq, bt(62) + i * 0.04, 0.28);
-    if (a <= 0.01) return;
-    const fl = x < PX ? 1 : -1;
-    const sqv = climax ? 1 - E.outElastic(clamp((u16 - i * 0.03) / 0.45)) : 1;
-    const hop = climax ? 44 * Math.abs(Math.sin(Math.PI * (u16 / BEAT))) * clamp(u16 / 0.2) : 0;
-    const chest = climax ? K(u16, [[0, 0.4], [0.12, 2.1, 'out2'], [0.6, 1.45, 'io2']]) : 0.3 + 0.32 * flick(tq);
-    const pose = climax ? mixP(P.stand({ head: -0.35 }), P.cheer(), E.outBack(clamp(u16 / 0.25), 1.6)) : P.stand({ head: -0.4, face: 'meh' });
-    person(c, { x, y: CYc + (1 - Math.min(1, a)) * 120 - hop, s: CSc, flip: fl }, pose, { D, k: 800 + i * 12, face: climax ? 'grin' : 'meh', square: sqv, headFill: mixHex(GREYM, PAL.hi, 1 - sqv), chest, glow: climax ? 1.4 : 0.8, alpha: clamp(a * 2) });
-  });
-  if (climax) {
-    const m = E.io2(clamp((tq - bt(66)) / (bt(67.5) - bt(66))));
-    if (m < 1) [[400, 0.02], [540, 0], [680, 0.05]].forEach(([x, d], j) => drawFlame(c, lerp(x, 540, m), GROUND + 10, 1.9 * E.outBack(clamp((u16 - d) / 0.25), 1.6) * (1 - 0.3 * m), D, 850 + j * 2, { ph: tq * 2.6 + j, glow: 1.4 }));
-    if (m > 0) drawFlame(c, 540, GROUND + 10, lerp(1.4, 2.4, m), D, 860, { ph: tq * 2.4, glow: 1.5, alpha: clamp(m * 3) });
-    HL('只要愿意，', tq, B[16] + 0.04, B[17] - 0.06, 320, { D, size: 116, seed: 100 });
-    HL('谁都能当！', tq, bt(65), B[17] - 0.06, 465, { D, size: 156, seed: 101, color: tint('谁都能当！', '谁都能当', YEL) });
-  } else {
-    HL('高富帅，要看命。', tq, B[15] + 0.06, B[16] - 0.06, 320, { D, size: 106, seed: 98 });
-    HL('黄毛呢？', tq, bt(62), B[16] - 0.06, 450, { D, size: 136, seed: 99, color: tint('黄毛呢？', '黄毛', YEL) });
-  }
 }
-export const END16 = { x: 540, y: GROUND + 10, s: 2.4 };
+function stars(t) { for (let i = 0; i < 20; i++) { const x = hs(i, 11) * 1080, y = hs(i, 12) * 1000, tw = 0.5 + 0.5 * Math.sin(t * 3 + i); sparkle(x, y, (6 + 8 * hs(i, 13)) * tw, '#ffffff', 0); } }
+
+// ------------------------------------------------------------------ B16 climax: anyone can be one
+export function climax(t) {
+  const lt = t - B[16];
+  bg(PAL.coral);
+  c.save(); sunburst(540, 560, 2600, 22, 'rgba(255,214,90,0.35)', null, lt * 0.6); c.restore();
+  rrFill(-200, GY, 1480, 800, 0, PAL.cream); rrFill(-200, GY, 1480, 18, 0, '#ead9bb');
+  const ms = lerp(900, 170, E.out4(clamp(lt / 0.5))) * (1 + 0.06 * beatP(t));
+  heartMascot(540, lerp(GY - 330, 560, E.out3(clamp(lt / 0.5))) + 10 * Math.sin(lt * 4), ms, t, { glow: 1, eyes: 'happy', mouth: 'open', bounce: beatP(t) });
+  const back = [[KID, 130, 380], [CHEF, 330, 470], [GIRL, 540, 450], [UNCLE, 750, 470], [RIDER, 950, 480]];
+  const front = [[OFFICE, 240, 430], [HUANGMAO, 540, 470], [GRANNY, 840, 420]];
+  const pose = (i) => { const ph = ((t - bb(16, 0) - i * 0.06) / BEAT); const k = ph - Math.floor(ph); return { jump: ph > 0 ? Math.sin(k * Math.PI) * 50 : 0 }; };
+  back.forEach(([P, x, h], i) => { const p = pose(i); person({ ...P, x, y: GY - 40, h: h * 0.9, jump: p.jump, eyes: 'happy', mouth: 'grin', armL: [150 + 10 * Math.sin(t * 9 + i), -10], armR: [150 + 10 * Math.sin(t * 9 + i + 1), 10], badge: 1, badgeGlow: 0.8 }, t); });
+  front.forEach(([P, x, h], i) => { const p = pose(i + 3); person({ ...P, x, y: GY + 60, h, jump: p.jump, eyes: 'happy', mouth: 'grin', armL: [150, -10], armR: [150, 10], badge: 1, badgeGlow: 0.8 }, t); });
+  confetti(t, B[16] + 0.02, 540, 700, 31, { n: 80, spd: 2000 });
+  confetti(t, bb(16, 2), 200, 900, 32, { n: 30, spd: 1500, ang: -Math.PI / 3 });
+  confetti(t, bb(16, 2), 880, 900, 33, { n: 30, spd: 1500, ang: -Math.PI * 2 / 3 });
+}

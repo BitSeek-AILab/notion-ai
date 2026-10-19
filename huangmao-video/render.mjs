@@ -3,8 +3,8 @@
 // calls window.renderAt(t) for every frame and pipes PNGs into ffmpeg. Then muxes the mastered audio.
 // Usage:
 //   node render.mjs stills 0.5,2.3,4.4 [--scale 0.5]       -> out/stills/t_XX.XXX.png
-//   node render.mjs video [--from 0 --to 47.6] [--workers 3] -> out/video_silent.mp4 (+ out/video.mp4 when out/audio_master.wav exists)
-//   node render.mjs video --from 30 --to 34.1 --prefix patchA_ --segonly -> lossless out/patchA_*.mkv only (see tools/splice.sh)
+//   node render.mjs video [--from 0 --to 55.352] [--workers 2] -> out/video_silent.mp4 (+ out/video.mp4 when out/audio_master.wav exists)
+//   node render.mjs video --from 30 --to 34.1 --prefix patchA_ --segonly -> lossless out/patchA_*.mkv only (splice back with ffmpeg -f concat)
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -64,7 +64,7 @@ function ffmpeg(a) {
       }
       await page.close();
     } else {
-      const FPS = 30, DUR = parseFloat(opt('dur', '53.2'));
+      const FPS = 30, DUR = parseFloat(opt('dur', '55.352'));
       const from = parseFloat(opt('from', '0')), to = parseFloat(opt('to', String(DUR)));
       const f0 = Math.round(from * FPS), f1 = Math.round(to * FPS);
       const workers = parseInt(opt('workers', '2'));

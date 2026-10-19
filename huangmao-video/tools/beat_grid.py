@@ -1,4 +1,4 @@
-"""节拍网格：用 librosa 跟踪节拍并线性回归出 BPM 与首拍相位（结果写在 js/film.js 的 BPM / PH）。
+"""节拍网格：用 librosa 跟踪节拍并线性回归出 BPM 与首拍相位（结果写在 js/beat.js 与 tools/sfx.py 的 BPM / PH）。
 
   python3 tools/beat_grid.py   # 读取 audio/music.mp3
 """

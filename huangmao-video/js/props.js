@@ -1,366 +1,185 @@
-// 黄毛理论 · props. Every prop is a closed contour (fill + boiled ink) or an open ink stroke, drawn on the live ctx from core.js.
-import { PAL, hs, clamp, lerp, E, spline, resample, boil, inkStroke, inkLoop, fillShape, fillPoly, circlePts, ellPts, rrectPts, prefix, toN } from './engine.js';
-import { c, line, drawMorph, letters, measure } from './core.js';
-import { REG, mixHex } from './shapes.js';
-import { YEL, YELL, ORG, ORGD, GINK, GREYL, GREYM, drawFlame } from './people.js';
+// 黄毛理论 v2 · flat props (px units; s = scale)
+import { c, PAL, shade, circ, ell, rrFill, rr, fillP, strokeP, line, arcLine, ring, heart, star, sparkle, path, lin, poly } from './draw.js';
+import { clamp, lerp, hs, E, D2R, popS, circlePts } from './lib.js';
+import { FONTS, label } from './type.js';
 
-export const RED = '#e5402b', HULL = '#3d4256', WOOD = '#c98f55', WOODD = '#9a6136', WATER = '#a9d3ec', SKYB = '#6f8fb3', OCHRE = '#c9971f';
-export const sd = (D, k) => D * 13 + k;
-export const dense = (P, closed = true, step = 4) => resample(spline(P, closed, step), 4, closed);
-export const tfm = (P, x = 0, y = 0, s = 1, r = 0, sx = 1) => {
-  const cs = Math.cos(r), sn = Math.sin(r);
-  return P.map((p) => { const px = p[0] * s * sx, py = p[1] * s; return [x + px * cs - py * sn, y + px * sn + py * cs, p[2]]; });
-};
-// closed shape from local control points (o: x, y, s, r, sx, w, amp, ink, reg, dense)
-export function shp(P, fill, D, k, o = {}) {
-  const Q = tfm(o.dense ? P : dense(P, true, o.step ?? 4), o.x, o.y, o.s, o.r, o.sx);
-  drawMorph(Q, fill, D, k, { w: o.w ?? 7, amp: o.amp ?? 1.3, ink: o.ink, reg: o.reg });
-  return Q;
-}
-export function ln(P, D, k, o = {}) { return line(tfm(P, o.x, o.y, o.s, o.r, o.sx), D, k, o); }
-export function box(x, y, w, h, r, fill, D, k, o = {}) { const Q = rrectPts(x - w / 2, y - h / 2, w, h, r, 4); drawMorph(Q, fill, D, k, { w: o.w ?? 6.5, amp: o.amp ?? 1.1, ink: o.ink, reg: o.reg }); return Q; }
-export function disc(x, y, r, fill, D, k, o = {}) { const Q = circlePts(x, y, r, Math.max(14, Math.round(r * 0.9))); drawMorph(Q, fill, D, k, { w: o.w ?? 6, amp: o.amp ?? 1, ink: o.ink, reg: o.reg }); return Q; }
-export function txt(str, x, y, size, fill, D, k, o = {}) { return letters(c, str, { font: o.font ?? 'MK', size, x, y, fill, ink: o.ink ?? null, inkW: o.inkW, D, seed: k, align: o.align, alpha: o.alpha, shadow: o.shadow, amp: o.amp }); }
-
-// ------------------------------------------------------------------ heart
-export function heartPts(x, y, R, n = 96) {
-  const o = [];
-  for (let i = 0; i < n; i++) {
-    const a = (i / n) * Math.PI * 2;
-    const hx = 16 * Math.pow(Math.sin(a), 3), hy = -(13 * Math.cos(a) - 5 * Math.cos(2 * a) - 2 * Math.cos(3 * a) - Math.cos(4 * a));
-    o.push([x + (hx * R) / 16, y + (hy * R) / 16 + R * 0.12]);
-  }
-  return o;
-}
-export function heartD(x, y, R, D, k, o = {}) {
-  if (R < 2) return;
-  const Q = heartPts(x, y, R).map((p) => o.sx ? [x + (p[0] - x) * o.sx, y + (p[1] - y) * (o.sy ?? 1)] : p);
-  drawMorph(Q, o.fill ?? PAL.pink, D, k, { w: o.w ?? Math.max(3, R * 0.09), amp: 1 });
-  if (o.shine !== false) { c.save(); c.globalAlpha *= 0.85; fillPoly(c, boil(ellPts(x - R * 0.42, y - R * 0.3, R * 0.16, R * 0.1, 14, -0.6), sd(D, k + 3), 0.6, 30), PAL.hi); c.restore(); }
-}
-// broken heart: two halves split by a zigzag, pushed apart by gap (px) and tilted
-export function brokenHeart(x, y, R, gap, D, k) {
-  const zig = [[x + 2, y - R * 0.62], [x - R * 0.16, y - R * 0.25], [x + R * 0.14, y + R * 0.05], [x - R * 0.12, y + R * 0.38], [x + 2, y + R * 1.05]];
-  for (const side of [-1, 1]) {
-    c.save();
-    c.translate(x + side * gap, y); c.rotate(side * 0.12 * clamp(gap / 30)); c.translate(-x, -y);
-    c.beginPath();
-    const far = x + side * R * 2;
-    c.moveTo(zig[0][0], y - R * 2); zig.forEach((p) => c.lineTo(p[0], p[1])); c.lineTo(zig.at(-1)[0], y + R * 2); c.lineTo(far, y + R * 2); c.lineTo(far, y - R * 2); c.closePath();
-    c.clip();
-    heartD(x, y, R, D, k, { fill: PAL.pink, shine: side < 0 });
-    line(zig, D, k + 5, { w: 5, t0: 2, t1: 2 });
-    c.restore();
-  }
-}
-
-// ------------------------------------------------------------------ speech bubble (one contour incl. the tail)
-export function bubblePts(x, y, rx, ry, tx, ty, wt = 0.3) {
-  const aT = Math.atan2((ty - y) / ry, (tx - x) / rx), o = [], n = 80;
-  for (let i = 0; i <= n; i++) { const a = aT + wt + (i / n) * (Math.PI * 2 - 2 * wt); o.push([x + rx * Math.cos(a), y + ry * Math.sin(a)]); }
-  o.push([tx, ty]);
-  return resample(o, 4, true);
-}
-export function bubble(x, y, rx, ry, tx, ty, s, D, k, o = {}) {
-  if (s <= 0.01) return;
-  c.save(); c.translate(tx, ty); c.scale(s, s); c.translate(-tx, -ty);
-  drawMorph(bubblePts(x, y, rx, ry, tx, ty, o.wt ?? 0.3), o.fill ?? PAL.hi, D, k, { w: o.w ?? 6, amp: 1.1 });
-  if (o.str) letters(c, o.str, { font: o.font ?? 'KL', size: o.size ?? 64, x, y: y + 2, fill: o.color ?? PAL.ink, ink: null, D, seed: k + 1, color: o.cmap });
+export function bouquet(x, y, s, t, o = {}) {
+  const droop = o.droop ?? 0;
+  c.save(); c.translate(x, y); c.rotate((o.r ?? -0.15) + droop * 0.9); c.scale(s, s);
+  // stems
+  for (let i = -2; i <= 2; i++) line(i * 3, 0, i * 9, -62, PAL.mint, 5);
+  // flowers
+  const F = [[-26, -70, PAL.coral], [0, -84, PAL.pink], [26, -70, PAL.coral2], [-12, -56, PAL.pink2], [14, -54, PAL.pink]];
+  F.forEach(([fx, fy, col], i) => {
+    const sag = droop * (12 + i * 4);
+    for (let k = 0; k < 5; k++) { const a = (k / 5) * Math.PI * 2 + i; circ(fx + Math.cos(a) * 9, fy + sag + Math.sin(a) * 9, 9, col); }
+    circ(fx, fy + sag, 7, PAL.yelL);
+  });
+  // wrap
+  fillP([[-30, -40], [30, -40], [9, 26], [-9, 26]], o.wrap ?? '#ffffff');
+  fillP([[-30, -40], [0, -40], [-9, 26]], shade(o.wrap ?? '#ffffff', -0.06));
+  fillP([[-9, -6], [9, -6], [16, 6], [-16, 6]], o.ribbon ?? PAL.coral);
   c.restore();
 }
-
-// ------------------------------------------------------------------ scribble tangle (open dense polyline)
-const TANGLE = new Map();
-export function tanglePts(cx, cy, w, h, seed = 3, n = 15) {
-  const key = [cx, cy, w, h, seed, n].join('|');
-  if (TANGLE.has(key)) return TANGLE.get(key);
-  const P = [[cx - w * 0.5, cy + h * 0.2]];
-  for (let i = 0; i < n; i++) {
-    const a = i * 2.4 + hs(seed, i) * 1.4, rr = 0.55 + 0.45 * hs(seed, i, 2);
-    P.push([cx + Math.cos(a) * w * 0.42 * rr + (i / n - 0.5) * w * 0.25, cy + Math.sin(a) * h * 0.45 * rr]);
-  }
-  P.push([cx + w * 0.5, cy - h * 0.1]);
-  const Q = resample(spline(P, false, 4), 3, false);
-  TANGLE.set(key, Q);
-  return Q;
-}
-
-// ------------------------------------------------------------------ brush (bristles at origin, handle to +x)
-export function brush(x, y, r, s, label, D, k, o = {}) {
+export function sprayCan(x, y, s, r = 0, o = {}) {
   c.save(); c.translate(x, y); c.rotate(r); c.scale(s, s);
-  shp([[44, -24, 1], [300, -18, 1], [322, 0], [300, 18, 1], [44, 24, 1]], WOOD, D, k, { w: 5.5, step: 3 });
-  shp([[0, -34, 1], [52, -34, 1], [52, 34, 1], [0, 34, 1]], GREYM, D, k + 1, { w: 5.5, step: 3 });
-  shp([[4, -32, 1], [-56, -38], [-108, -26], [-130, -2], [-112, 24], [-58, 38], [4, 32, 1]], PAL.ink, D, k + 2, { w: 4 });
-  if (o.wet !== false) for (let i = 0; i < 3; i++) ln([[-40 - i * 26, -18 + i * 12], [-96 - i * 8, -10 + i * 10]], D, k + 3 + i, { w: 2.4, color: '#5a5048' });
-  letters(c, label, { font: 'KL', size: o.size ?? 40, x: 186, y: 1, fill: PAL.hi, ink: PAL.ink, inkW: 3, D, seed: k + 6, shadow: PAL.ink, sdx: 2, sdy: 3 });
+  rrFill(-16, -46, 32, 72, 10, o.col ?? PAL.yel);
+  rrFill(-16, -22, 32, 26, 0, '#ffffff'); label('黄', 0, -9, 20, PAL.navy, { font: 'RH' });
+  rrFill(-9, -58, 18, 14, 4, PAL.grey); rrFill(-5, -66, 14, 9, 3, PAL.navy);
   c.restore();
 }
-
-// ------------------------------------------------------------------ square frame (ring) + its shards
-export function frameRing(x, y, w, h, th, fill, D, k, o = {}) {
-  const A = rrectPts(x - w / 2, y - h / 2, w, h, 16, 5), Bq = rrectPts(x - w / 2 + th, y - h / 2 + th, w - 2 * th, h - 2 * th, 8, 5);
-  const a = boil(A, sd(D, k) + 0.5, 1.2, 70), b = boil(Bq, sd(D, k) + 0.7, 1.2, 70);
-  c.save(); c.beginPath();
-  for (const P of [a, b]) { P.forEach((p, i) => (i ? c.lineTo(p[0] + REG.dx, p[1] + REG.dy) : c.moveTo(p[0] + REG.dx, p[1] + REG.dy))); c.closePath(); }
-  c.fillStyle = fill; c.fill('evenodd'); c.restore();
-  inkLoop(c, A, { seed: sd(D, k), w: o.w ?? 7, amp: 1.2, heavy: 0.3 });
-  inkLoop(c, Bq, { seed: sd(D, k + 1), w: (o.w ?? 7) * 0.8, amp: 1.2, heavy: 0.3 });
-}
-export function frameShards(x, y, w, h, th, n, u, fill, D, k) {
-  if (u > 1.4) return;
-  const M = 12, N = n * M;
-  const A = toN(rrectPts(x - w / 2, y - h / 2, w, h, 16, 5), N), Bq = toN(rrectPts(x - w / 2 + th, y - h / 2 + th, w - 2 * th, h - 2 * th, 8, 5), N);
-  for (let i = 0; i < n; i++) {
-    const P = [];
-    for (let j = i * M; j <= i * M + M; j++) P.push(A[j % N]);
-    for (let j = i * M + M; j >= i * M; j--) P.push(Bq[j % N]);
-    let cx = 0, cy = 0; P.forEach((p) => { cx += p[0]; cy += p[1]; }); cx /= P.length; cy /= P.length;
-    const dx = cx - x, dy = cy - y, dl = Math.hypot(dx, dy) || 1, v = 1500 * (0.6 + 0.7 * hs(k, i)), rot = (hs(k, i, 2) - 0.5) * 10 * u;
-    const ox = (dx / dl) * v * u, oy = (dy / dl) * v * u + 1300 * u * u - 250 * u;
-    const cs = Math.cos(rot), sn = Math.sin(rot), sc = 1 - 0.3 * u;
-    drawMorph(P.map((p) => { const px = (p[0] - cx) * sc, py = (p[1] - cy) * sc; return [cx + ox + px * cs - py * sn, cy + oy + px * sn + py * cs]; }), fill, D, k + i, { w: 5.5, amp: 1 });
-  }
-}
-
-// ------------------------------------------------------------------ red X (two strokes drawn on)
-export function redX(x, y, R, u, D, k) {
-  if (u <= 0) return;
-  const a = clamp(u * 2), b = clamp(u * 2 - 1);
-  const s1 = [[x - R, y - R * 0.9], [x, y + R * 0.02], [x + R, y + R]], s2 = [[x + R * 0.95, y - R], [x, y], [x - R * 0.9, y + R * 0.95]];
-  if (a > 0) inkStroke(c, prefix(spline(s1, false, 4), a), { seed: sd(D, k), w: R * 0.2, amp: 1.2, t0: 8, t1: 20, dense: true, color: RED, heavy: 0, jit: 0.25 });
-  if (b > 0) inkStroke(c, prefix(spline(s2, false, 4), b), { seed: sd(D, k + 1), w: R * 0.2, amp: 1.2, t0: 8, t1: 20, dense: true, color: RED, heavy: 0, jit: 0.25 });
-}
-
-// ------------------------------------------------------------------ ship prow (screen space), waves, water, rain
-export const PROW = [[196, 1040, 1], [560, 1012], [1150, 958, 1], [1150, 1520, 1], [640, 1500], [380, 1350], [250, 1150]];
-export const deckY = (x) => 1040 + (x - 196) * (958 - 1040) / (1150 - 196);
-export function prowDetails(D, k, a = 1, dx = 0) {
-  if (a <= 0.02) return;
-  c.save(); c.globalAlpha *= a; c.translate(dx, 0);
-  const rail = []; for (let x = 222; x <= 1120; x += 18) rail.push([x, deckY(x) - 58]);
-  line(rail, D, k, { w: 5, color: PAL.hi, t0: 2, t1: 2 });
-  for (let x = 260; x <= 1110; x += 74) line([[x, deckY(x) - 58], [x, deckY(x) - 4]], D, k + x, { w: 4, color: PAL.hi, t0: 1, t1: 1 });
-  for (let x = 620; x <= 1100; x += 112) disc(x, deckY(x) + 120, 17, PAL.hi, D, k + 50 + x, { w: 4 });
-  line([[300, 1205], [700, 1188], [1150, 1170]], D, k + 9, { w: 9, color: RED, t0: 6, t1: 6 });
-  c.restore();
-}
-export function waterLine(y, A, L, ph, x0 = -60, x1 = 1140) { const P = []; for (let x = x0; x <= x1; x += 14) P.push([x, y + A * Math.sin((x / L) * Math.PI * 2 + ph)]); return P; }
-export function water(y, ph, D, k, a = 1) {
-  if (a <= 0.02) return;
+export function puff(t, t0, x, y, r, col = '#ffffff', seed = 2) {
+  const lt = t - t0; if (lt < 0 || lt > 0.8) return;
+  const u = E.out3(clamp(lt / 0.5)), a = 1 - clamp((lt - 0.4) / 0.4);
   c.save(); c.globalAlpha *= a;
-  const top = waterLine(y, 14, 260, ph);
-  fillShape(c, [...top, [1140, 2000], [-60, 2000]], WATER, { seed: sd(D, k), amp: 1.2, dx: 0, dy: 0 });
-  line(top, D, k, { w: 6, dense: false, t0: 4, t1: 4, color: PAL.blueD });
-  for (let j = 1; j < 4; j++) line(waterLine(y + j * 70, 9, 180 + j * 20, ph * (1 + j * 0.3) + j), D, k + j, { w: 4.5, color: PAL.blue });
+  for (let i = 0; i < 7; i++) { const ang = (i / 7) * Math.PI * 2 + hs(seed, i); circ(x + Math.cos(ang) * r * 0.7 * u, y + Math.sin(ang) * r * 0.55 * u, r * (0.45 + 0.2 * hs(seed, i, 2)) * (0.4 + 0.6 * u), col); }
   c.restore();
 }
-// wave segments that tear off and become rain (u: 0 = waves, 1 = rain)
-export function wavesToRain(t, y, u, D, k, o = {}) {
-  const n = 34, sp = o.speed ?? 2300;
-  for (let i = 0; i < n; i++) {
-    const row = i % 3, x0 = -40 + ((i * 37) % 1160), y0 = y + row * 70 + 10 * Math.sin(x0 / 40);
-    const rx = 20 + hs(k, i) * 1060, fall = (hs(k, i, 2) * 2200 + sp * Math.max(0, t)) % 2200 - 160;
-    const v = E.io2(clamp(u * 1.4 - hs(k, i, 3) * 0.4));
-    const px = lerp(x0, rx - 0.18 * fall, v), py = lerp(y0, fall, v);
-    const ang = lerp(0.05, 1.37, v), L = lerp(46, 64, v);
-    const dx = Math.cos(ang) * L / 2, dy = Math.sin(ang) * L / 2;
-    const ddx = -dx * Math.sign(1 - v + 0.001) * (v > 0.5 ? 0.25 : 1);
-    line([[px - ddx, py - dy], [px + ddx, py + dy]], D, k + i, { w: lerp(4.5, 3.6, v), color: v > 0.5 ? SKYB : PAL.blue, t0: 3, t1: 3 });
-  }
-}
-export function rain(t, D, k, a = 1, n = 38) {
-  if (a <= 0.02) return;
-  c.save(); c.globalAlpha *= a;
-  for (let i = 0; i < n; i++) {
-    const fall = (hs(k, i, 2) * 2200 + 2300 * t) % 2200 - 160, x = 20 + hs(k, i) * 1100 - 0.2 * fall;
-    line([[x + 10, fall - 30], [x - 10, fall + 30]], D, k + i, { w: 3.6, color: SKYB, t0: 3, t1: 3 });
-  }
-  c.restore();
-}
-
-// ------------------------------------------------------------------ vehicles (local: ground y = 0, facing +x)
-export function wheel(x, y, r, spin, D, k, o = {}) {
-  disc(x, y, r, o.fill ?? PAL.ink, D, k, { w: 5 });
-  disc(x, y, r * 0.55, o.hub ?? GREYL, D, k + 1, { w: 4 });
-  for (let i = 0; i < 3; i++) { const a = spin + (i * Math.PI * 2) / 3; line([[x, y], [x + Math.cos(a) * r * 0.5, y + Math.sin(a) * r * 0.5]], D, k + 2 + i, { w: 3.5, t0: 1, t1: 1 }); }
-}
-export const OLD_BODY = [[-118, -150], [-92, -174], [-6, -172], [16, -206], [96, -208], [112, -178], [100, -142], [-16, -128], [-104, -128]];
-export const SUPER_BODY = [[-196, -128], [-152, -178], [-40, -186], [58, -224], [154, -210], [214, -150], [196, -104], [96, -92], [-24, -88], [-128, -100]];
-export const bikeBody = (u) => u <= 0 ? dense(OLD_BODY) : u >= 1 ? dense(SUPER_BODY) : null;
-export function oldBike(x, y, s, spin, D, k, o = {}) {
+export function battery(x, y, s, level, o = {}) {
+  const col = level > 0.5 ? PAL.mint : level > 0.2 ? PAL.yel : PAL.coral;
   c.save(); c.translate(x, y); c.scale(s, s);
-  const sp = o.morph ?? 0;
-  const wr = lerp(60, 68, sp), wx = lerp(132, 156, sp);
-  ln([[-wx, -wr], [-60, -150], [92, -186]], D, k, { w: 8 });
-  ln([[96, -190], [wx, -wr]], D, k + 1, { w: 8 });
-  if (sp < 0.5) { box(10, -100, 84, 56, 10, GREYM, D, k + 2, { w: 5 }); ln([[-20, -84], [-110, -82], [-178, -70]], D, k + 3, { w: 9, color: GREYM }); }
-  wheel(-wx, -wr, wr, spin, D, k + 4); wheel(wx, -wr, wr, spin, D, k + 10);
-  const body = o.body ?? dense(OLD_BODY);
-  drawMorph(body, mixHex(o.color ?? PAL.blue, RED, sp), D, k + 20, { w: 6.5 });
-  if (sp < 0.5) { shp([[-112, -150], [-84, -170], [-4, -170], [-8, -152], [-96, -146]], PAL.ink, D, k + 21, { w: 4, reg: false }); disc(124, -188, 15, YELL, D, k + 22, { w: 4 }); ln([[94, -192], [78, -238], [52, -242]], D, k + 23, { w: 6 }); }
-  else { disc(10, -156, 30, PAL.hi, D, k + 24, { w: 4 }); txt('1', 10, -154, 44, PAL.ink, D, k + 25, { font: 'KL' }); ln([[60, -224], [40, -250]], D, k + 26, { w: 6 }); shp([[150, -206], [204, -150], [168, -150], [128, -196]], '#bfe0f5', D, k + 27, { w: 4 }); }
+  rrFill(-62, -34, 124, 68, 16, o.frame ?? '#ffffff'); rrFill(62, -14, 12, 28, 5, o.frame ?? '#ffffff');
+  rrFill(-52, -24, 104, 48, 9, o.inner ?? PAL.navy);
+  if (level > 0.005) rrFill(-48, -20, 96 * clamp(level), 40, 6, col);
+  if (o.pct !== false) label(Math.round(level * 100) + '%', 0, 70, 42, o.txt ?? '#ffffff', { font: 'RH' });
+  if (o.bolt) { fillP([[6, -30], [-14, 4], [0, 4], [-6, 30], [14, -4], [0, -4]], PAL.yel); }
   c.restore();
 }
-export function van(x, y, s, D, k, o = {}) {
-  c.save(); c.translate(x, y); c.scale(s, s);
-  ln([[-70, -232], [-58, -270]], D, k, { w: 6 });
-  shp(ellPts(-58, -290, 46, 18, 24, 0).map((p) => [p[0], p[1], 0]), GREYL, D, k + 1, { r: 0, w: 5, dense: true });
-  shp([[-210, -40, 1], [-210, -226, 1], [118, -226, 1], [196, -150], [214, -40, 1]], PAL.hi, D, k + 2, { w: 7 });
-  shp([[124, -206, 1], [184, -146, 1], [124, -146, 1]], '#bfe0f5', D, k + 3, { w: 5, step: 3 });
-  shp([[-210, -116, 1], [214, -116, 1], [214, -86, 1], [-210, -86, 1]], PAL.blue, D, k + 4, { w: 4, step: 3 });
-  txt('TV', -60, -168, 96, RED, D, k + 5, { font: 'KL', ink: PAL.ink, inkW: 4 });
-  wheel(-120, -40, 44, o.spin ?? 0, D, k + 6); wheel(126, -40, 44, o.spin ?? 0, D, k + 12);
-  c.restore();
-}
-export function checkerFlag(x, y, s, t, D, k) {
-  c.save(); c.translate(x, y); c.scale(s, s);
-  ln([[0, 0], [0, -420]], D, k, { w: 9 });
-  const nx = 5, ny = 4, W = 240, H = 160, P = (u, v) => [u * W, -420 + v * H + 14 * Math.sin(u * 5 - t * 9) * u];
-  for (let i = 0; i < nx; i++) for (let j = 0; j < ny; j++) {
-    if ((i + j) % 2) continue;
-    fillPoly(c, boil([P(i / nx, j / ny), P((i + 1) / nx, j / ny), P((i + 1) / nx, (j + 1) / ny), P(i / nx, (j + 1) / ny)], sd(D, k + i * 7 + j), 0.8, 40), PAL.ink);
-  }
-  const edge = []; for (let i = 0; i <= 10; i++) edge.push(P(i / 10, 0)); for (let i = 10; i >= 0; i--) edge.push(P(i / 10, 1));
-  inkLoop(c, resample(edge, 4, true), { seed: sd(D, k + 50), w: 5, amp: 1, heavy: 0.2 });
-  c.restore();
-}
-export function cart(x, y, s, D, k, o = {}) {
-  c.save(); c.translate(x, y); c.scale(s, s);
-  const bk = [[-160, -250, 1], [160, -250, 1], [126, -112, 1], [-126, -112, 1]];
-  shp(bk, o.fill ?? '#cfe7f7', D, k, { w: 7, step: 3 });
-  for (let i = 1; i < 6; i++) { const u = i / 6; ln([[lerp(-160, 160, u), -250], [lerp(-126, 126, u), -112]], D, k + i, { w: 3.5, t0: 1, t1: 1 }); }
-  for (let j = 1; j < 3; j++) { const v = j / 3; ln([[lerp(-160, -126, v), lerp(-250, -112, v)], [lerp(160, 126, v), lerp(-250, -112, v)]], D, k + 10 + j, { w: 3.5, t0: 1, t1: 1 }); }
-  ln([[160, -250], [196, -300], [242, -300]], D, k + 20, { w: 8 });
-  ln([[-126, -112], [-110, -60], [120, -60], [126, -112]], D, k + 21, { w: 7 });
-  if (o.wheels !== false) { wheel(-96, -28, 28, o.spin ?? 0, D, k + 22); wheel(96, -28, 28, o.spin ?? 0, D, k + 28); }
-  c.restore();
-}
-// leave slip + stamp
-export function slip(x, y, s, D, k, o = {}) {
-  if (s <= 0.01) return;
-  c.save(); c.translate(x, y); c.rotate(o.r ?? -0.03); c.scale(s, s);
-  box(0, 0, 600, 400, 18, PAL.hi, D, k, { w: 7 });
-  txt('请假条', 0, -122, 76, PAL.ink, D, k + 1, { font: 'KL' });
-  line([[-250, -64], [250, -64]], D, k + 2, { w: 4, t0: 2, t1: 2 });
-  txt('事由：不开心', -250, 6, 60, PAL.ink, D, k + 3, { align: 'left' });
-  line([[-60, 46], [250, 46]], D, k + 4, { w: 3.5, t0: 2, t1: 2, color: GINK });
-  txt('天数：1 天', -250, 112, 46, GINK, D, k + 5, { align: 'left' });
-  c.restore();
-}
-export function stampZhun(x, y, s, D, k, o = {}) {
-  if (s <= 0.01) return;
-  c.save(); c.translate(x, y); c.rotate(o.r ?? -0.22); c.scale(s, s); c.globalAlpha *= o.a ?? 0.92;
-  const R = 92;
-  for (const [r, w] of [[R, 10], [R - 16, 4]]) inkLoop(c, circlePts(0, 0, r, 60), { seed: sd(D, k + r), w, amp: 1.4, heavy: 0, color: RED });
-  txt('准', 0, 4, 112, RED, D, k + 2, { font: 'KL' });
-  c.restore();
-}
-
-// ------------------------------------------------------------------ B14 icons
-export function dyeBottle(x, y, s, D, k) {
-  c.save(); c.translate(x, y); c.scale(s, s);
-  shp([[-52, 80, 1], [-56, -40], [-36, -82], [-14, -92, 1], [-14, -128, 1], [14, -128, 1], [14, -92, 1], [36, -82], [56, -40], [52, 80, 1]], '#c9a6f2', D, k, { w: 6.5 });
-  shp([[-8, -128, 1], [-2, -176, 1], [8, -176, 1], [10, -128, 1]], GREYM, D, k + 1, { w: 4, step: 3 });
-  box(0, 10, 76, 70, 10, PAL.hi, D, k + 2, { w: 4 });
-  shp([[-22, -6], [0, -40], [22, -6], [12, 24], [-12, 24]], YEL, D, k + 3, { w: 3.5 });
-  c.restore();
-}
-export function spikyHead(x, y, s, D, k, ph = 0) {
-  c.save(); c.translate(x, y); c.scale(s, s);
-  const sp = []; for (let i = 0; i < 11; i++) { const a = Math.PI + 0.15 + (i / 10) * (Math.PI - 0.3); const r = i % 2 ? 76 : 128 + 6 * Math.sin(ph + i); sp.push([Math.cos(a) * r, Math.sin(a) * r - 6, 1]); }
-  shp([...sp, [70, 10], [-70, 10]], PAL.ink, D, k, { w: 5 });
-  disc(0, 6, 72, PAL.hi, D, k + 1, { w: 6.5 });
-  ln([[-40, -20], [-12, -8]], D, k + 2, { w: 6 }); ln([[40, -20], [12, -8]], D, k + 3, { w: 6 });
-  disc(-24, 6, 7, PAL.ink, D, k + 4, { w: 0 }); disc(24, 6, 7, PAL.ink, D, k + 5, { w: 0 });
-  ln([[-22, 40], [0, 32], [22, 40]], D, k + 6, { w: 5.5 });
-  c.restore();
-}
-
-// ------------------------------------------------------------------ pedestal, top hat, dice
-export function pedestal(x, yTop, w, h, D, k) {
-  box(x, yTop + h / 2, w, h, 10, PAL.cream, D, k, { w: 7 });
-  box(x, yTop + 16, w + 40, 34, 8, OCHRE, D, k + 1, { w: 6 });
-  line([[x - w / 2 + 22, yTop + h * 0.32], [x + w / 2 - 22, yTop + h * 0.32]], D, k + 2, { w: 5, color: OCHRE });
-  txt('高富帅', x, yTop + h * 0.58, 76, OCHRE, D, k + 3, { font: 'KL', ink: PAL.ink, inkW: 4 });
-}
-export function topHat(c2, hc, R, ha, D) {
-  const cs = Math.cos(ha), sn = Math.sin(ha), P = (x, y) => [hc[0] + (x * cs - y * sn) * R, hc[1] + (x * sn + y * cs) * R];
-  drawMorph(resample([P(-1.15, -0.62), P(1.15, -0.62), P(1.15, -0.8), P(0.68, -0.8), P(0.6, -1.9), P(-0.6, -1.9), P(-0.68, -0.8), P(-1.15, -0.8)], 4, true), PAL.ink, D, 71, { w: 4, reg: false });
-  drawMorph(resample([P(-0.66, -0.86), P(0.66, -0.86), P(0.64, -1.1), P(-0.64, -1.1)], 4, true), OCHRE, D, 72, { w: 3, reg: false });
-}
-export function dice(x, y, s, r, D, k, o = {}) {
+// paint roller with handle; label on the roller sleeve
+export function roller(x, y, s, r, str, o = {}) {
   c.save(); c.translate(x, y); c.rotate(r); c.scale(s, s);
-  const S = 70;
-  shp([[-S, -S, 1], [-S + 34, -S - 34, 1], [S + 34, -S - 34, 1], [S, -S, 1]], '#f3eee4', D, k, { w: 5, step: 3 });
-  shp([[S, -S, 1], [S + 34, -S - 34, 1], [S + 34, S - 34, 1], [S, S, 1]], GREYL, D, k + 1, { w: 5, step: 3 });
-  box(0, 0, 2 * S, 2 * S, 14, PAL.hi, D, k + 2, { w: 6 });
-  for (const [px, py] of [[-28, -S - 17], [12, -S - 17], [52, -S - 17]]) disc(px, py, 6, PAL.ink, D, k + 3 + px, { w: 0 });
-  txt(o.str ?? '命', 0, 4, 100, RED, D, k + 9, { font: 'KL' });
+  // handle (goes down-right from the frame)
+  strokeP([[0, 0], [0, 60], [40, 110], [40, 210]], PAL.grey, 12);
+  rrFill(28, 190, 24, 120, 12, PAL.coral);
+  // sleeve
+  rrFill(-150, -46, 300, 92, 30, o.col ?? '#1d1b3a');
+  c.save(); c.globalAlpha *= 0.25; rrFill(-140, -40, 280, 22, 11, '#ffffff'); c.restore();
+  label(str, 0, 2, 52, '#ffffff', { font: 'RH' });
   c.restore();
 }
-
-// ------------------------------------------------------------------ palm (fingers up), match, matchbox, progress bar
-export const PALM = [[-74, 210, 1], [-84, 70], [-150, 12], [-188, -36], [-174, -78], [-132, -62], [-90, -14, 1],
-  [-96, -150], [-90, -214], [-68, -234], [-46, -216], [-42, -96, 1], [-38, -236], [-16, -264], [10, -264], [26, -236], [28, -96, 1],
-  [34, -222], [54, -246], [76, -240], [88, -214], [84, -90, 1], [94, -170], [110, -192], [128, -188], [138, -164], [130, -56], [118, 70], [96, 210, 1]];
-export function matchstick(x, y, r, s, D, k, o = {}) {
-  c.save(); c.translate(x, y); c.rotate(r); c.scale(s, s);
-  shp([[-260, -11, 1], [0, -11, 1], [0, 11, 1], [-260, 11, 1]], WOOD, D, k, { w: 5, step: 3 });
-  shp(ellPts(16, 0, 30, 21, 24), o.burnt ? '#5a3d2e' : RED, D, k + 1, { w: 5, dense: true });
-  c.restore();
+export function moon(x, y, r, bgCol) { circ(x, y, r, PAL.cream); circ(x + r * 0.42, y - r * 0.28, r * 0.86, bgCol); }
+export function starsBg(t, seed = 4, n = 26, x0 = 0, y0 = 0, w = 1080, h = 1100) {
+  for (let i = 0; i < n; i++) { const x = x0 + hs(seed, i) * w, y = y0 + hs(seed, i, 2) * h, tw = 0.5 + 0.5 * Math.sin(t * 3 + i * 1.7); sparkle(x, y, (8 + 12 * hs(seed, i, 3)) * (0.6 + 0.4 * tw), '#ffffff', 0); }
 }
-export function matchbox(x, y, s, D, k) {
+// bed seen from the side: headboard left
+export function bed(x, y, w, col, o = {}) {
+  rrFill(x - 30, y - 150, 34, 210, 14, shade(col, -0.25));   // headboard
+  rrFill(x + w - 20, y - 70, 26, 130, 12, shade(col, -0.25)); // footboard
+  rrFill(x - 10, y - 40, w + 10, 60, 14, col);                // frame
+  rrFill(x - 4, y - 70, w, 44, 18, '#ffffff');                // mattress
+  rrFill(x + 6, y - 112, 120, 50, 24, o.pillow ?? '#ffffff');  // pillow
+}
+export function blanket(x, y, w, col, o = {}) {
+  const P = [[x, y - 64], [x + w * 0.22, y - 100 - (o.lump ?? 0)], [x + w * 0.6, y - 96 - (o.lump ?? 0) * 0.6], [x + w, y - 80], [x + w + 8, y - 30], [x - 6, y - 30]];
+  c.beginPath(); c.moveTo(P[0][0], P[0][1]); c.bezierCurveTo(x + w * 0.1, y - 110 - (o.lump ?? 0), x + w * 0.5, y - 108, x + w, y - 82); c.lineTo(x + w + 8, y - 28); c.lineTo(x - 6, y - 28); c.closePath();
+  c.fillStyle = col; c.fill();
+  c.save(); c.clip(); c.fillStyle = shade(col, -0.1); c.fillRect(x - 10, y - 50, w + 30, 30); c.restore();
+}
+// paper scroll unrolling downward from (x,y)
+export function scroll(x, y, w, len, lines, t, o = {}) {
+  rrFill(x - w / 2, y, w, len, 6, '#fffaf1');
+  c.save(); c.beginPath(); c.rect(x - w / 2, y, w, len); c.clip();
+  lines.forEach((ln, i) => { const yy = y + 50 + i * 54; if (yy > y + len - 10) return; if (typeof ln === 'string') label(ln, x, yy, 36, PAL.navy, { font: 'RB' }); else { line(x - w * 0.36, yy, x - w * 0.36 + w * 0.72 * ln, yy, PAL.grey2, 9); } });
+  c.restore();
+  rrFill(x - w / 2 - 12, y + len - 14, w + 24, 28, 14, '#e9dcc4');
+  rrFill(x - w / 2 - 12, y - 14, w + 24, 28, 14, '#e9dcc4');
+}
+// meeting table (front)
+export function table(x, y, w, col = '#6b4e3d') { rrFill(x - w / 2, y, w, 34, 10, shade(col, 0.1)); rrFill(x - w / 2 + 20, y + 30, w - 40, 260, 0, col); }
+export function boardChart(x, y, w, h, t, t0) {
+  rrFill(x - w / 2, y - h / 2, w, h, 20, '#ffffff');
+  const bars = [0.35, 0.55, 0.45, 0.8];
+  bars.forEach((v, i) => { const bh = (h - 90) * v * E.out3(clamp((t - t0 - i * 0.08) / 0.4)); rrFill(x - w / 2 + 50 + i * (w - 100) / 4, y + h / 2 - 40 - bh, (w - 100) / 4 - 26, bh, 8, i === 3 ? PAL.coral : PAL.blue3); });
+}
+// motorbike (side view, facing right). returns seat & bar points
+export function motorbike(x, y, s, t, o = {}) {
   c.save(); c.translate(x, y); c.scale(s, s);
-  box(0, 0, 300, 170, 14, '#e8b04a', D, k, { w: 6.5 });
-  box(0, -64, 300, 34, 6, WOODD, D, k + 1, { w: 4 });
-  txt('火柴', 0, 22, 62, PAL.ink, D, k + 2, { font: 'KL' });
+  const wheel = (wx) => { circ(wx, 0, 44, PAL.navy); circ(wx, 0, 20, PAL.grey2); c.save(); c.translate(wx, 0); c.rotate(t * 18); for (let i = 0; i < 3; i++) { c.rotate(Math.PI * 2 / 3); line(0, 0, 0, 18, PAL.navy, 5); } c.restore(); };
+  wheel(-95); wheel(95);
+  fillP([[-95, -10], [-40, -70], [40, -78], [70, -40], [95, -6], [60, -10], [10, -24], [-60, -16]], o.col ?? PAL.coral);
+  fillP([[-60, -70], [20, -84], [24, -74], [-56, -60]], PAL.navy); // seat
+  line(60, -60, 95, -2, PAL.grey, 9); line(56, -64, 72, -110, PAL.grey, 8); line(64, -110, 92, -112, PAL.navy, 10); // fork + bars
+  circ(100, -58, 13, PAL.yelL); // headlight
+  c.restore();
+  return { seat: [x - 20 * s, y - 80 * s], bar: [x + 82 * s, y - 110 * s] };
+}
+export function ticket(x, y, s, t, str = '机会', o = {}) {
+  c.save(); c.translate(x, y); c.scale(s, s); c.rotate(Math.sin(t * 5) * 0.1);
+  const fl = Math.sin(t * 22) * 0.5 + 0.5;
+  for (const sx of [-1, 1]) { c.save(); c.scale(sx, 1); fillP([[40, -10], [100, -50 - fl * 30], [110, -10], [92, 6]], '#ffffff'); c.restore(); }
+  rrFill(-70, -40, 140, 80, 16, o.col ?? PAL.yel);
+  c.save(); c.globalAlpha *= 0.3; rrFill(-60, -30, 120, 16, 8, '#ffffff'); c.restore();
+  label(str, 0, 3, 46, PAL.navy, { font: 'RH' });
   c.restore();
 }
-export function progressBar(x, y, w, h, fillU, D, k, o = {}) {
-  const P = rrectPts(x - w / 2, y - h / 2, w, h, h / 2, 4);
-  drawMorph(P, PAL.hi, D, k, { w: 6 });
-  const seg = o.seg ?? 7, fw = (w - 12) / seg;
-  if (fillU > 0) {
-    const Q = rrectPts(x - w / 2 + 6, y - h / 2 + 6, Math.max(h - 12, fw * fillU), h - 12, (h - 12) / 2, 4);
-    fillShape(c, Q, YEL, { seed: sd(D, k + 1), amp: 1, dx: REG.dx, dy: REG.dy });
-  }
-  for (let i = 1; i < seg; i++) line([[x - w / 2 + 6 + i * fw, y - h / 2 + 8], [x - w / 2 + 6 + i * fw, y + h / 2 - 8]], D, k + 2 + i, { w: 3.5, color: GREYM, t0: 1, t1: 1 });
-}
-
-// ------------------------------------------------------------------ doors, cane, phone
-export function door(x, yb, w, h, open, D, k, o = {}) { // open 0..1: panel swings to the left hinge, light pours out
-  box(x, yb - h / 2, w + 30, h + 26, 6, WOODD, D, k, { w: 6.5 });
-  if (open > 0.02) {
-    box(x, yb - h / 2 + 6, w, h - 12, 3, YELL, D, k + 1, { w: 4 });
-    c.save(); c.globalAlpha *= 0.55 * open;
-    fillPoly(c, boil([[x - w / 2, yb], [x + w / 2, yb], [x + w / 2 + 120 * open, yb + 90], [x - w / 2 - 120 * open, yb + 90]], sd(D, k + 2), 1, 50), YELL);
-    c.restore();
-  }
-  const pw = w * (1 - 0.82 * open), x0 = x - w / 2;
-  if (o.burn === undefined || o.burn < 1) {
-    c.save();
-    if (o.burn > 0) { c.beginPath(); c.rect(-100, -100, 2400, 3000); c.moveTo(x + o.burn * w * 1.1, yb - h * 0.5); c.arc(x, yb - h * 0.5, o.burn * w * 1.1, 0, Math.PI * 2, true); c.clip('evenodd'); }
-    const P = [[x0, yb - h + 6], [x0 + pw, yb - h + 6 - 40 * open], [x0 + pw, yb + 40 * open], [x0, yb]];
-    drawMorph(resample(P, 4, true), o.panel ?? '#b9844f', D, k + 3, { w: 6 });
-    if (open < 0.5) disc(x0 + pw - 26, yb - h * 0.48, 11, OCHRE, D, k + 4, { w: 3.5 });
-    c.restore();
-    if (o.burn > 0) {
-      const R = o.burn * w * 1.1;
-      inkLoop(c, circlePts(x, yb - h * 0.5, R, 40).filter((p) => Math.abs(p[0] - x) < w / 2 && Math.abs(p[1] - (yb - h * 0.5)) < h / 2), { seed: sd(D, k + 5), w: 9, amp: 2.5, color: '#3a2a20' });
-    }
-  }
-  if (o.web) { line([[x0 + 2, yb - h + 70], [x0 + 70, yb - h + 6]], D, k + 6, { w: 2.2, color: GINK }); line([[x0 + 2, yb - h + 40], [x0 + 26, yb - h + 30], [x0 + 40, yb - h + 6]], D, k + 7, { w: 2, color: GINK }); line([[x0 + 2, yb - h + 6], [x0 + 46, yb - h + 50]], D, k + 8, { w: 2, color: GINK }); }
-}
-export function phoneFrame(x, y, w, h, D, k, a = 1) {
-  if (a <= 0.01) return;
-  c.save(); c.globalAlpha *= a;
-  const A = rrectPts(x - w / 2 - 26, y - h / 2 - 60, w + 52, h + 130, 56, 5), Bq = rrectPts(x - w / 2, y - h / 2, w, h, 14, 5);
-  c.beginPath(); for (const P of [A, Bq]) { P.forEach((p, i) => (i ? c.lineTo(p[0], p[1]) : c.moveTo(p[0], p[1]))); c.closePath(); }
-  c.fillStyle = '#2a2b33'; c.fill('evenodd');
-  inkLoop(c, A, { seed: sd(D, k), w: 7, amp: 1.2, heavy: 0.3 });
-  inkLoop(c, Bq, { seed: sd(D, k + 1), w: 4, amp: 1, heavy: 0.1 });
-  box(x, y - h / 2 - 30, 90, 14, 7, '#55565f', D, k + 2, { w: 0 });
-  disc(x, y + h / 2 + 36, 18, '#55565f', D, k + 3, { w: 3 });
+export function skateboard(x, y, s, r = 0, o = {}) {
+  c.save(); c.translate(x, y); c.rotate(r); c.scale(s, s);
+  c.beginPath(); c.moveTo(-110, -14); c.quadraticCurveTo(-130, -30, -118, -40); c.lineTo(-100, -26); c.lineTo(100, -26); c.lineTo(118, -40); c.quadraticCurveTo(130, -30, 110, -14); c.closePath(); c.fillStyle = o.col ?? PAL.coral; c.fill();
+  rrFill(-104, -22, 208, 10, 5, shade(o.col ?? PAL.coral, -0.2));
+  circ(-70, 0, 15, PAL.navy); circ(70, 0, 15, PAL.navy); circ(-70, 0, 6, PAL.grey2); circ(70, 0, 6, PAL.grey2);
   c.restore();
 }
-export { YEL, YELL, ORG, ORGD, GINK, GREYL, GREYM, drawFlame, mixHex };
+export function podium(x, y, w, h, str, col = PAL.purple) {
+  rrFill(x - w / 2, y, w, h, 14, col); rrFill(x - w / 2 - 14, y - 6, w + 28, 26, 12, shade(col, 0.2));
+  label(str, x, y + h * 0.5, 64, '#ffffff', { font: 'RH' });
+}
+export function moneyBag(x, y, s) {
+  c.save(); c.translate(x, y); c.scale(s, s);
+  ell(0, 10, 46, 44, '#c8a165'); fillP([[-18, -30], [18, -30], [10, -44], [-10, -44]], '#b88f55'); rrFill(-24, -36, 48, 10, 5, PAL.coral);
+  label('¥', 0, 14, 54, '#ffffff', { font: 'RH' });
+  c.restore();
+}
+export function die(x, y, s, r, face = '命', o = {}) {
+  c.save(); c.translate(x, y); c.rotate(r); c.scale(s, s);
+  c.save(); c.globalAlpha *= 0.18; rrFill(-82, -66, 170, 170, 34, PAL.navy); c.restore();
+  rrFill(-90, -90, 180, 180, 36, '#ffffff'); rrFill(-90, 52, 180, 38, 0, '#ffffff');
+  c.save(); rr(-90, -90, 180, 180, 36); c.clip(); c.fillStyle = '#e8e6f4'; c.fillRect(-90, 60, 180, 40); c.restore();
+  if (face) label(face, 0, -4, 110, o.col ?? PAL.coral, { font: 'RH' });
+  else for (const [dx, dy] of [[-45, -45], [45, 45], [0, 0], [45, -45], [-45, 45]]) circ(dx, dy, 14, PAL.navy);
+  c.restore();
+}
+export function door(x, y, w, h, open, t, o = {}) {
+  // frame + light
+  rrFill(x - w / 2 - 22, y - h - 22, w + 44, h + 22, 18, o.frame ?? shade(o.col ?? PAL.purple, -0.3));
+  const g = c.createLinearGradient(x, y - h, x, y); g.addColorStop(0, '#fffbe6'); g.addColorStop(1, PAL.yelL);
+  c.fillStyle = g; c.fillRect(x - w / 2, y - h, w, h);
+  if (open > 0.02) { for (let i = 0; i < 5; i++) sparkle(x - w * 0.3 + hs(i, 1) * w * 0.6, y - h * 0.2 - hs(i, 2) * h * 0.7, 14 + 10 * Math.sin(t * 4 + i), PAL.yel, 0); }
+  // panel (hinged on left): width shrinks with open (perspective)
+  const pw = w * (1 - 0.85 * E.io2(clamp(open)));
+  fillP([[x - w / 2, y - h], [x - w / 2 + pw, y - h + 30 * open], [x - w / 2 + pw, y - 30 * open], [x - w / 2, y]], o.col ?? PAL.purple);
+  if (pw > 30) { rrFill(x - w / 2 + pw * 0.12, y - h * 0.86 + 20 * open, pw * 0.76, h * 0.3, 10, shade(o.col ?? PAL.purple, 0.12)); rrFill(x - w / 2 + pw * 0.12, y - h * 0.48 + 10 * open, pw * 0.76, h * 0.36, 10, shade(o.col ?? PAL.purple, 0.12)); circ(x - w / 2 + pw * 0.85, y - h * 0.5, 12, PAL.yel); }
+  if (open < 0.05 && o.leak !== false) { c.save(); c.globalAlpha *= 0.85; c.fillStyle = PAL.yelL; c.fillRect(x + w / 2 - 6, y - h, 6, h); c.fillRect(x - w / 2, y - 6, w, 6); c.restore(); }
+}
+export function cobweb(x, y, s, a = 1) {
+  if (a <= 0) return;
+  c.save(); c.globalAlpha *= a * 0.9; c.translate(x, y); c.scale(s, s); c.strokeStyle = '#ffffff'; c.lineWidth = 2.4; c.lineCap = 'round';
+  for (let i = 0; i <= 4; i++) { const ang = (i / 4) * Math.PI / 2; c.beginPath(); c.moveTo(0, 0); c.lineTo(Math.cos(ang) * 110, Math.sin(ang) * 110); c.stroke(); }
+  for (let k = 1; k <= 3; k++) { c.beginPath(); for (let i = 0; i <= 4; i++) { const ang = (i / 4) * Math.PI / 2, r = k * 32; const px = Math.cos(ang) * r, py = Math.sin(ang) * r; i ? c.quadraticCurveTo(Math.cos(ang - Math.PI / 8) * r * 0.8, Math.sin(ang - Math.PI / 8) * r * 0.8, px, py) : c.moveTo(px, py); } c.stroke(); }
+  c.restore();
+}
+export function phone(x, y, w, h, fn) {
+  c.save(); c.globalAlpha *= 0.18; rrFill(x - w / 2 + 16, y - h / 2 + 22, w, h, 70, PAL.navy); c.restore();
+  rrFill(x - w / 2, y - h / 2, w, h, 70, PAL.navy);
+  rrFill(x - w / 2 + 22, y - h / 2 + 22, w - 44, h - 44, 52, '#f3f1fb');
+  rrFill(x - 70, y - h / 2 + 40, 140, 30, 15, PAL.navy);
+  c.save(); rr(x - w / 2 + 22, y - h / 2 + 22, w - 44, h - 44, 52); c.clip(); fn && fn(x - w / 2 + 22, y - h / 2 + 22, w - 44, h - 44); c.restore();
+}
+export function chatBubble(x, y, str, side, s, o = {}) {
+  if (s <= 0.001) return;
+  const size = o.size ?? 50; c.font = `${size}px ${FONTS.RB}`; const tw = c.measureText(str).width;
+  const w = tw + 70, h = size + 52;
+  const ax = side < 0 ? x : x - w;
+  c.save(); c.translate(side < 0 ? ax : ax + w, y + h / 2); c.scale(s, s); c.translate(-(side < 0 ? ax : ax + w), -(y + h / 2));
+  rrFill(ax, y, w, h, 34, o.col ?? (side < 0 ? '#ffffff' : PAL.blue));
+  label(str, ax + w / 2, y + h / 2 + 2, size, o.txt ?? (side < 0 ? PAL.navy : '#ffffff'), { font: 'RB' });
+  c.restore();
+}
+export function magnifier(x, y, r, s = 1) {
+  c.save(); c.translate(x, y); c.scale(s, s);
+  line(r * 0.7, r * 0.7, r * 1.6, r * 1.6, PAL.navy, r * 0.28);
+  c.save(); c.globalAlpha *= 0.35; circ(0, 0, r, '#ffffff'); c.restore();
+  ring(0, 0, r, r * 0.16, PAL.navy);
+  c.save(); c.globalAlpha *= 0.8; arcLine(0, 0, r * 0.7, Math.PI * 1.1, Math.PI * 1.45, '#ffffff', r * 0.1); c.restore();
+  c.restore();
+}
+export function cane(x, y, h) { strokeP([[x, y], [x, y - h], [x - 26, y - h - 18]], '#8a5a3c', 10); }
