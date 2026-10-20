@@ -146,7 +146,7 @@ v3 的节奏不变（还是老师讲课的“说一句、演示、停一停”�
 ```
 pascal-brianchon-video/
 ├── index.html            # 渲染页面（render.mjs 逐帧调用 window.renderAt(t)，t = 真实秒数）
-├── render.mjs            # Playwright 逐帧渲染 → ffmpeg（v5：--segonly 只出无损画面分段，由 tools/composite.py 合成）
+├── render.mjs            # Playwright 逐帧渲染（直接读画布像素）→ ffmpeg（v5：--segonly 只出无损画面分段，由 tools/composite.py 合成）
 ├── score/                # v5：Op. 9 No. 2 的 Mutopia 乐谱 LilyPond 源文件（CC BY-SA 3.0）；两首的 MIDI 由 tools/get_music.sh 下载（不入库）
 ├── js/
 │   ├── geo.js            # 精确射影几何内核：齐次坐标求交、帕斯卡、布列安桑、极点 / 极线、3-D 抬升
@@ -168,6 +168,7 @@ pascal-brianchon-video/
     ├── film_audio.py     # v5：配乐（A 完整 + B 剪接）+ 7 处钟片 + 母带 → out/audio_master.wav
     ├── strip.py          # v5：乐谱带（钢琴卷帘）逐帧绘制；也可单独抽帧检查
     ├── composite.py      # v5：无损画面分段 + 乐谱带 + 配乐 → out/pb_v5_full.mp4
+    ├── chunks.sh         # v5：分 4 块出片（无损画面 → 叠乐谱带 → out/part_*.mp4 → 拼接 + 配乐），中断后可续做
     ├── verify_strip.py   # v5：样片的核验版（样片下方加乐谱带）
     ├── sample_audio.py   # v5：样片配乐（0–36 s）
     ├── clock_check.mjs   # v5：时钟检查（每段动画倍速 α、停顿倍数 β、单调性、片长）
@@ -207,13 +208,16 @@ python3 tools/film_audio.py                # → out/audio_master.wav（454.97 s
 node tools/verify_geometry.mjs             # 几何逐帧审计
 node render.mjs stills 26.1,216.5,320.2,430.5 --scale 0.5   # 抽帧检查（真实秒数）→ out/stills/
 python3 tools/strip.py stills 26.07,323.1 --film            # 乐谱带抽帧检查（--film：叠在画面上）→ out/stills/
-node render.mjs video --workers 2 --prefix F_ --segonly     # 无损画面分段 → out/F_0.mkv、out/F_1.mkv（13 649 帧；2 核约 6 小时，约 16 GB）
+bash tools/chunks.sh                       # 出片（推荐）：13 649 帧分 4 块，无损画面（UT Video）+ 乐谱带 → out/part_*.mp4，再拼接 + 配乐
+                                           #   → out/pb_v5_full.mp4（2 核约 65 分钟，临时文件峰值约 8 GB；重跑会跳过已完成的块）
+# 或者一次出完（FFV1 无损分段约 16 GB）：
+node render.mjs video --workers 2 --prefix F_ --segonly     # 无损画面分段 → out/F_0.mkv、out/F_1.mkv
 python3 tools/composite.py                 # 画面 + 乐谱带 + 配乐 → out/pb_v5_full.mp4（可用 --from / --to 出片段）
 ```
 
 ## 版本
 
-- **v5**（454.97 s · 7 分 35 秒）：跟着乐谱编舞——两首夜曲的乐谱逐音对到录音上（A 572 处、B 1 048 处起音），134 个画面事件各自落在乐谱里指定的音上（一个乐句 = 一句几何，结论落在终止式上）；时钟改由乐谱驱动（`js/cues.js`）；A 完整保留（含尾声），B 剪去第 13–38 小节；画面底部加乐谱带（向左滚动的钢琴卷帘，红线 = 此刻，▼ = 画面事件）；点缀音减到 7 处和弦音钟片；新增 `tools/score_align.py`、`choreo.py`、`strip.py`、`film_audio.py`、`composite.py`。
+- **v5**（454.97 s · 7 分 35 秒）：跟着乐谱编舞——两首夜曲的乐谱逐音对到录音上（A 572 处、B 1 048 处起音），134 个画面事件各自落在乐谱里指定的音上（一个乐句 = 一句几何，结论落在终止式上）；时钟改由乐谱驱动（`js/cues.js`）；A 完整保留（含尾声），B 剪去第 13–38 小节；画面底部加乐谱带（向左滚动的钢琴卷帘，红线 = 此刻，▼ = 画面事件）；点缀音减到 7 处和弦音钟片；新增 `tools/score_align.py`、`choreo.py`、`strip.py`、`film_audio.py`、`composite.py`。出片提速：录帧改为直接读画布像素（`getImageData`，与 PNG 截图逐像素一致），渲染快约 5 倍；`tools/chunks.sh` 分块出片，全片 2 核约 65 分钟。
 - **v4**（441.5 s · 7 分 21 秒）：卡点——91 个关键节点（点冒出、边亮起、交出交点、三点共线 / 三线共点、大字落地）里 85 个落在钢琴起音上；只微调停顿和动画快慢（平均挪动 0.62 秒，片长与配乐不变）；新增 `tools/music_beats.py`、`tools/sync.mjs`、`js/sync.js`。
 - **v3**（441.5 s · 7 分 21 秒）：共面那一步放慢拆细 + “为什么只能交于一点”的俯视插入动画；新增第三幕“对偶凭什么成立”（极点 / 极线、拉伊尔定理、对偶回去）；新增第四幕 Dandelin 升维证明帕斯卡（降维打击 2.0）；老师节奏（放慢、75 处停顿、9 个关键提问、4 处暂停提示）；配乐换成两首肖邦夜曲；点缀音 9 处；画面收敛、去掉闪白和大震屏。
 - **v2**（69.9 s）：定理先一步一步讲清楚；对偶逐件搭建 + 对偶字典；三维证明拆成编号 5 步并放慢；删去圆锥曲线支线；音效 8 处。

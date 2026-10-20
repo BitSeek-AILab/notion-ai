@@ -1,10 +1,12 @@
 #!/usr/bin/env node
 // Deterministic frame renderer: serves this folder, opens index.html in headless Chromium (Playwright),
-// calls window.renderAt(t) for every frame and pipes PNGs into ffmpeg. Then muxes the mastered audio.
+// calls window.renderAt(t) for every frame and pipes the canvas pixels into ffmpeg (stills: PNG screenshots). Then muxes the mastered audio.
 // Usage:
 //   node render.mjs stills 0.5,2.3,4.4 [--scale 0.5]       -> out/stills/t_XX.XXX.png
 //   node render.mjs video [--from 0 --to 47.6] [--workers 3] -> out/video_silent.mp4 (+ out/video.mp4 when out/audio_master.wav exists)
 //   node render.mjs video --from 30 --to 34.1 --prefix patchA_ --segonly -> lossless out/patchA_*.mkv only (see tools/splice.sh)
+//   … --lossless utvideo   segments as UT Video RGB (5x faster to encode / decode than FFV1, ~1.8x bigger; see tools/chunks.sh)
+//   … --shot               old capture path (PNG screenshots, ~3x slower; pixel-identical)
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -40,6 +42,22 @@ async function openPage(browser, port, scale) {
   return page;
 }
 const shot = (page) => page.screenshot({ type: 'png', clip: { x: 0, y: 0, width: 1080, height: 1920 }, optimizeForSpeed: true });
+// video: read the canvas itself — it is opaque and 1:1 with the viewport, so getImageData() gives exactly the screenshot's
+// pixels (checked frame by frame) without the compositor readback + PNG encode that make page.screenshot() ~3x slower
+async function armGrab(page) {
+  await page.evaluate(() => {
+    const cv = document.querySelector('canvas'), x = cv.getContext('2d'), rgb = new Uint8Array(cv.width * cv.height * 3);
+    const b64 = rgb.toBase64 ? (u) => u.toBase64()
+      : (u) => { let s = ''; for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000)); return btoa(s); };
+    window.__grab = async (t) => {
+      await window.renderAt(t);
+      const d = x.getImageData(0, 0, cv.width, cv.height).data;
+      for (let i = 0, j = 0; i < d.length; i += 4, j += 3) { rgb[j] = d[i]; rgb[j + 1] = d[i + 1]; rgb[j + 2] = d[i + 2]; }
+      return b64(rgb);
+    };
+  });
+}
+const grab = async (page, t) => Buffer.from(await page.evaluate((t) => window.__grab(t), t), 'base64');
 
 function ffmpeg(a) {
   const p = spawn('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', ...a], { stdio: ['pipe', 'inherit', 'inherit'] });
@@ -77,11 +95,16 @@ function ffmpeg(a) {
         const a = f0 + w * per, b = Math.min(f1, a + per);
         if (a >= b) return;
         const seg = path.join(outDir, `${opt('prefix', 'seg_')}${w}.mkv`); segs[w] = seg;
-        const ff = ffmpeg(['-f', 'image2pipe', '-framerate', String(FPS), '-c:v', 'png', '-i', '-', '-c:v', 'ffv1', '-level', '3', '-pix_fmt', 'yuv444p', seg]);
+        const useShot = args.includes('--shot');
+        const codec = opt('lossless', 'ffv1') === 'utvideo' ? ['-c:v', 'utvideo', '-pix_fmt', 'gbrp', '-pred', 'median'] : ['-c:v', 'ffv1', '-level', '3', '-pix_fmt', 'yuv444p'];
+        const ff = ffmpeg([...(useShot ? ['-f', 'image2pipe', '-framerate', String(FPS), '-c:v', 'png'] : ['-f', 'rawvideo', '-pix_fmt', 'rgb24', '-s', '1080x1920', '-framerate', String(FPS)]),
+          '-i', '-', ...codec, seg]);
         const page = await openPage(browser, port, 1);
+        if (!useShot) await armGrab(page);
         for (let f = a; f < b; f++) {
-          await page.evaluate((t) => window.renderAt(t), f / FPS);
-          const buf = await shot(page);
+          let buf;
+          if (useShot) { await page.evaluate((t) => window.renderAt(t), f / FPS); buf = await shot(page); }
+          else { buf = await grab(page, f / FPS); if (buf.length !== 1080 * 1920 * 3) throw new Error(`frame ${f}: ${buf.length} bytes`); }
           if (!ff.p.stdin.write(buf)) await new Promise((r) => ff.p.stdin.once('drain', r));
           if ((f - a) % 60 === 0) console.log(`w${w} frame ${f} / ${b}  ${((Date.now() - t0) / 1000).toFixed(0)}s`);
         }
