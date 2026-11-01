@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>文献脱水 · 闯关看板 | PAPER QUEST</title>
+<meta name="description" content="把枯燥的 PDF 变成游戏化闯关地图：每读完一节，自动提取核心论点、生成思维导图、点亮成就勋章。">
+<meta name="theme-color" content="#1a1c2c">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'><rect width='10' height='10' fill='%231a1c2c'/><rect x='4' y='0' width='2' height='2' fill='%2341a6f6'/><rect x='3' y='2' width='4' height='3' fill='%2341a6f6'/><rect x='2' y='5' width='6' height='3' fill='%2341a6f6'/><rect x='3' y='8' width='4' height='1' fill='%2341a6f6'/></svg>">
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/fusion-pixel-12px-proportional-sc@5.3.0/index.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<canvas id="sky" aria-hidden="true"></canvas>
+
+<header class="hud">
+  <a class="back" href="../" aria-label="返回工具合集">◀ 合集</a>
+  <div class="brand">
+    <h1>文献脱水<span>闯关看板</span></h1>
+    <p>PAPER QUEST · 读完即通关</p>
+  </div>
+  <div class="player" id="player">
+    <img class="avatar" id="avatar" alt="">
+    <div class="p-info">
+      <b id="pTitle">Lv.1 文献萌新</b>
+      <div class="xpbar" aria-hidden="true"><i id="xpFill"></i></div>
+      <small id="xpText">XP 0 / 300</small>
+    </div>
+    <span class="stat" title="连击：连续一次答对的关卡数"><span aria-hidden="true">🔥</span><b id="streak">0</b><span class="sr">连击</span></span>
+    <button class="stat stat-btn" id="badgeBtn" type="button" aria-label="打开勋章墙"><span aria-hidden="true">🏅</span><b id="badgeCount">0/10</b></button>
+    <button class="px-btn ghost" id="aiBtn" type="button">⚙ AI</button>
+  </div>
+</header>
+
+<main id="main">
+  <!-- 开始 -->
+  <section class="screen start" id="start">
+    <div class="hero">
+      <p class="eyebrow">▶ PRESS START</p>
+      <h2 class="hero-title">把枯燥的 PDF<br><em>变成闯关地图</em></h2>
+      <p class="hero-sub">每一节是一个关卡：自动脱水出核心论点、生成思维导图，答对通关小测就能点亮勋章。专治拖延，考研党 / 科研人友好。</p>
+
+      <label class="cartridge" id="drop" tabindex="0">
+        <input type="file" id="file" accept=".pdf,.txt,.md,application/pdf,text/plain" hidden>
+        <span class="cart-top" aria-hidden="true"></span>
+        <span class="cart-label">
+          <span class="cart-title">INSERT PAPER</span>
+          <span class="cart-sub" id="dropText">拖入 PDF / TXT，或点击选择文件</span>
+        </span>
+        <span class="cart-pins" aria-hidden="true"></span>
+      </label>
+
+      <div class="start-actions">
+        <button class="px-btn primary" id="demoBtn" type="button">▶ 试玩 Demo 文献</button>
+        <button class="px-btn ghost" id="pasteBtn" type="button" aria-expanded="false" aria-controls="pasteBox">粘贴文本</button>
+        <button class="px-btn ghost" id="resumeBtn" type="button" hidden>继续上次的冒险</button>
+      </div>
+      <div class="paste" id="pasteBox" hidden>
+        <label for="pasteText" class="sr">粘贴文献正文</label>
+        <textarea id="pasteText" rows="7" placeholder="粘贴论文 / 长文正文。带有“1 引言”“2. Method”“## 标题”等章节标题时，会自动切分成关卡。"></textarea>
+        <button class="px-btn primary" id="pasteGo" type="button">开始脱水 ▶</button>
+      </div>
+      <p class="privacy">🔒 文件只在你的浏览器里解析，不会上传到任何服务器。</p>
+    </div>
+    <ul class="feats">
+      <li><span class="f-ico" data-spr="drop"></span><b>一键脱水</b><span>按章节切成关卡，抽取核心论点与关键词</span></li>
+      <li><span class="f-ico" data-spr="b_net"></span><b>思维导图</b><span>每关一张导图，通关后汇成全书图谱</span></li>
+      <li><span class="f-ico" data-spr="b_crown"></span><b>勋章成就</b><span>经验值、连击、10 枚像素勋章</span></li>
+    </ul>
+  </section>
+
+  <!-- 加载 -->
+  <section class="screen loading" id="loading" hidden>
+    <div class="load-box">
+      <div class="load-spr" id="loadSpr" aria-hidden="true"></div>
+      <p class="load-title">正在脱水<span class="dots"></span></p>
+      <div class="load-bar" aria-hidden="true"><i id="loadFill"></i></div>
+      <p class="load-step" id="loadStep" aria-live="polite">读取卡带</p>
+    </div>
+  </section>
+
+  <!-- 地图 -->
+  <section class="screen map" id="mapScreen" hidden>
+    <div class="doc-bar">
+      <div class="doc-meta">
+        <p class="eyebrow">WORLD 1 · 文献地图</p>
+        <h2 id="docTitle">-</h2>
+        <p class="doc-stats" id="docStats"></p>
+      </div>
+      <div class="doc-actions">
+        <button class="px-btn" id="atlasBtn" type="button">🧠 全书图谱</button>
+        <button class="px-btn" id="exportBtn" type="button">⬇ 导出脱水笔记</button>
+        <button class="px-btn ghost" id="freeBtn" type="button" aria-pressed="false">🔓 自由模式</button>
+        <button class="px-btn ghost" id="newBtn" type="button">＋ 换一篇</button>
+      </div>
+    </div>
+    <div class="progress-strip" aria-hidden="true"><i id="docFill"></i></div>
+    <div class="world" id="world">
+      <svg id="worldPath" aria-hidden="true"></svg>
+      <div id="deco" aria-hidden="true"></div>
+      <div id="nodes" role="list" aria-label="关卡列表"></div>
+      <img class="hero-spr" id="heroSpr" alt="" aria-hidden="true">
+    </div>
+  </section>
+</main>
+
+<!-- 关卡面板 -->
+<div class="drawer" id="drawer" hidden>
+  <div class="drawer-mask" data-close></div>
+  <aside class="drawer-box" role="dialog" aria-modal="true" aria-labelledby="lvTitle">
+    <header class="lv-head">
+      <span class="lv-no" id="lvNo">STAGE 01</span>
+      <h3 id="lvTitle">-</h3>
+      <button class="icon-btn" type="button" data-close aria-label="关闭"><svg viewBox="0 0 7 7" width="21" height="21" shape-rendering="crispEdges" aria-hidden="true"><path fill="currentColor" d="M0 0h1v1h-1zM6 0h1v1h-1zM1 1h1v1h-1zM5 1h1v1h-1zM2 2h1v1h-1zM4 2h1v1h-1zM3 3h1v1h-1zM3 3h1v1h-1zM4 4h1v1h-1zM2 4h1v1h-1zM5 5h1v1h-1zM1 5h1v1h-1zM6 6h1v1h-1zM0 6h1v1h-1z"/></svg></button>
+    </header>
+    <div class="lv-stats" id="lvStats"></div>
+    <div class="tabs" role="tablist" id="tabs">
+      <button role="tab" type="button" data-tab="dry" aria-selected="true">💧 脱水精华</button>
+      <button role="tab" type="button" data-tab="mind" aria-selected="false">🧠 思维导图</button>
+      <button role="tab" type="button" data-tab="raw" aria-selected="false">📜 原文</button>
+    </div>
+    <div class="lv-body" id="lvBody" role="tabpanel"></div>
+    <footer class="lv-foot" id="lvFoot"></footer>
+  </aside>
+</div>
+
+<!-- 勋章墙 -->
+<div class="modal" id="badgeModal" hidden>
+  <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="bmTitle">
+    <header class="lv-head"><span class="lv-no">ACHIEVEMENTS</span><h3 id="bmTitle">勋章墙</h3><button class="icon-btn" type="button" data-close aria-label="关闭"><svg viewBox="0 0 7 7" width="21" height="21" shape-rendering="crispEdges" aria-hidden="true"><path fill="currentColor" d="M0 0h1v1h-1zM6 0h1v1h-1zM1 1h1v1h-1zM5 1h1v1h-1zM2 2h1v1h-1zM4 2h1v1h-1zM3 3h1v1h-1zM3 3h1v1h-1zM4 4h1v1h-1zM2 4h1v1h-1zM5 5h1v1h-1zM1 5h1v1h-1zM6 6h1v1h-1zM0 6h1v1h-1z"/></svg></button></header>
+    <div class="badges" id="badgeGrid"></div>
+  </div>
+</div>
+
+<!-- 全书图谱 -->
+<div class="modal" id="atlasModal" hidden>
+  <div class="modal-box wide" role="dialog" aria-modal="true" aria-labelledby="amTitle">
+    <header class="lv-head"><span class="lv-no">ATLAS</span><h3 id="amTitle">全书脱水图谱</h3><button class="icon-btn" type="button" data-close aria-label="关闭"><svg viewBox="0 0 7 7" width="21" height="21" shape-rendering="crispEdges" aria-hidden="true"><path fill="currentColor" d="M0 0h1v1h-1zM6 0h1v1h-1zM1 1h1v1h-1zM5 1h1v1h-1zM2 2h1v1h-1zM4 2h1v1h-1zM3 3h1v1h-1zM3 3h1v1h-1zM4 4h1v1h-1zM2 4h1v1h-1zM5 5h1v1h-1zM1 5h1v1h-1zM6 6h1v1h-1zM0 6h1v1h-1z"/></svg></button></header>
+    <p class="atlas-tip">滚轮缩放 · 拖拽平移 · 已通关章节高亮</p>
+    <div class="atlas" id="atlas"></div>
+  </div>
+</div>
+
+<div class="achv" id="achv" aria-live="assertive"></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<canvas id="fx" aria-hidden="true"></canvas>
+
+<script src="../assets/vibe-ai.js"></script>
+<script src="sprites.js"></script>
+<script src="demo.js"></script>
+<script src="dehydrate.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
