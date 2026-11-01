@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>反PUA翻译器 · 赛博诊断室</title>
+<meta name="description" content="输入导师或老板的施压话术，一键输出潜台词拆解 + 3 种硬气程度的高情商回复。">
+<meta name="theme-color" content="#05070b">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%2305070b'/><rect x='3' y='4' width='10' height='8' fill='%233dff9a'/><rect x='5' y='6' width='2' height='2' fill='%2305070b'/><rect x='9' y='6' width='2' height='2' fill='%2305070b'/><rect x='6' y='9' width='4' height='1' fill='%23ff3d9a'/></svg>">
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/fusion-pixel-12px-proportional-sc@5.3.0/index.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<canvas id="rain" aria-hidden="true"></canvas>
+<div class="crt" aria-hidden="true"></div>
+
+<div id="boot" class="boot" aria-hidden="true">
+  <pre id="bootLog"></pre>
+</div>
+
+<header class="top">
+  <a class="back" href="../" aria-label="返回工具合集">◀ 合集</a>
+  <div class="logo">
+    <h1 class="glitch" data-text="反PUA翻译器">反PUA翻译器</h1>
+    <p class="sub">ANTI-PUA DECODER <span>·</span> 赛博诊断室 v2.0</p>
+  </div>
+  <div class="engine">
+    <span class="led" id="led"></span>
+    <span id="engineLabel">本地引擎 · 离线可用</span>
+    <button class="btn-ghost" id="aiBtn" type="button">⚙ 接入大模型</button>
+  </div>
+</header>
+
+<main class="grid">
+  <section class="panel input-panel" aria-labelledby="h-input">
+    <div class="panel-head"><span class="no">01</span><h2 id="h-input">病例录入</h2><em>INPUT</em></div>
+
+    <div class="field-label" id="role-label">施压来源</div>
+    <div class="roles" role="radiogroup" aria-labelledby="role-label" id="roles"></div>
+
+    <label class="field-label" for="input">原话（越原汁原味越准）</label>
+    <div class="ta-wrap">
+      <textarea id="input" maxlength="500" rows="5" placeholder="粘贴导师 / 老板 / HR / 甲方的原话……&#10;例：年轻人不要太计较，等公司上市了，期权少不了你的。"></textarea>
+      <span class="count" id="count">0/500</span>
+    </div>
+
+    <button class="btn-scan" id="scanBtn" type="button">
+      <span class="scan-text">▶ 开始诊断</span><kbd>Ctrl + Enter</kbd>
+    </button>
+
+    <div class="samples-head">
+      <span class="field-label" style="margin:0">经典病例 · 点击即填</span>
+      <button class="btn-mini" id="shuffle" type="button">换一批 »</button>
+    </div>
+    <div class="samples" id="samples"></div>
+
+
+    <div class="history" id="historyBox" hidden>
+      <div class="field-label">📁 病历档案</div>
+      <ul id="history"></ul>
+    </div>
+  </section>
+
+  <section class="panel report-panel" aria-labelledby="h-report">
+    <div class="panel-head"><span class="no">02</span><h2 id="h-report">诊断报告</h2><em>REPORT</em></div>
+
+    <div class="monitor">
+      <canvas id="ecg" aria-hidden="true"></canvas>
+      <div class="vitals">
+        <div class="v-label">PUA 指数</div>
+        <div class="v-num" id="vNum">--</div>
+        <div class="v-lv" id="vLv">STANDBY</div>
+      </div>
+    </div>
+
+    <div id="report" class="report" aria-live="polite">
+      <div class="idle" id="idle">
+        <canvas id="bot" width="16" height="16" class="bot" aria-hidden="true"></canvas>
+        <p class="idle-title">赛博医生已就位</p>
+        <p class="idle-sub">录入原话，我来拆穿潜台词，再开出三档回复处方。</p>
+        <ul class="idle-feats">
+          <li><b>潜台词拆解</b> 逐句翻译成人话</li>
+          <li><b>成分分析</b> 画饼 / 情感绑架 / 甩锅……</li>
+          <li><b>三档回复</b> 温和 · 有理 · 硬核</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="foot">
+  <span>本工具仅供娱乐与沟通参考 · 内容不上传服务器</span>
+  <span>Made with Vibecoding · <a href="https://github.com/BitSeek-AILab/notion-ai" target="_blank" rel="noopener">GitHub</a></span>
+</footer>
+
+<div class="modal" id="shareModal" hidden>
+  <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="share-title">
+    <div class="panel-head"><span class="no">03</span><h2 id="share-title">诊断书已生成</h2><em>SHARE</em></div>
+    <img id="shareImg" alt="诊断书图片预览">
+    <div class="modal-actions">
+      <button class="btn-ghost" id="copyShare" type="button">复制 @好友 文案</button>
+      <a class="btn-solid" id="dlShare" download="反PUA诊断书.png">下载诊断书</a>
+      <button class="btn-ghost" id="closeShare" type="button">关闭</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script src="../assets/vibe-ai.js"></script>
+<script src="engine.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
