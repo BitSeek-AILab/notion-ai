@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Mood Desk · 赛博电子痛包 & 桌面情绪小组件</title>
+<meta name="description" content="3D 流体 + 莫兰迪色系的桌面情绪小组件：专注时钟、今日运势、极简记账、可拖拽的全息电子吧唧痛包，还能用一句“再温柔一点”调整整套审美。">
+<meta name="theme-color" content="#c9d3d9">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='%23d4a5a5'/><stop offset='.5' stop-color='%239fb1bc'/><stop offset='1' stop-color='%23a3b18a'/></linearGradient></defs><circle cx='32' cy='32' r='28' fill='url(%23g)'/><circle cx='24' cy='22' r='8' fill='%23fff' opacity='.6'/></svg>">
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-screen-webfont@1.7.0/lxgwwenkaigbscreen.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource-variable/fraunces@5.1.0/index.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource-variable/fraunces@5.1.0/wght-italic.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/dm-mono@5.1.0/index.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></symbol>
+    <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3c.6 4.2 2.8 6.4 7 7-4.2.6-6.4 2.8-7 7-.6-4.2-2.8-6.4-7-7 4.2-.6 6.4-2.8 7-7z"/><path d="M19 16.5c.2 1.3.9 2 2.2 2.2-1.3.2-2 .9-2.2 2.2-.2-1.3-.9-2-2.2-2.2 1.3-.2 2-.9 2.2-2.2z"/></symbol>
+    <symbol id="i-coin" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M9 8l3 4 3-4M12 12v5M9.5 13h5M9.5 15.5h5"/></symbol>
+    <symbol id="i-bag" viewBox="0 0 24 24"><path d="M5 9h14l-1 11H6L5 9z"/><path d="M9 9V7a3 3 0 0 1 6 0v2"/><circle cx="10" cy="14" r="1.6"/><circle cx="14.5" cy="15.5" r="1.2"/></symbol>
+    <symbol id="i-knob" viewBox="0 0 24 24"><path d="M5 4v16M12 4v16M19 4v16"/><circle cx="5" cy="15" r="2.2"/><circle cx="12" cy="8" r="2.2"/><circle cx="19" cy="13" r="2.2"/></symbol>
+    <symbol id="i-reset" viewBox="0 0 24 24"><path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3"/><path d="M4 4.5v4h4"/></symbol>
+    <symbol id="i-undo" viewBox="0 0 24 24"><path d="M9 7L4.5 11.5 9 16"/><path d="M5 11.5h9a5 5 0 0 1 0 10h-2"/></symbol>
+    <symbol id="i-share" viewBox="0 0 24 24"><path d="M12 15V4M8 8l4-4 4 4"/><path d="M5 13v5a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5"/></symbol>
+    <symbol id="i-grid" viewBox="0 0 24 24"><circle cx="7" cy="7" r="2.6"/><circle cx="17" cy="7" r="2.6"/><circle cx="7" cy="17" r="2.6"/><circle cx="17" cy="17" r="2.6"/></symbol>
+    <symbol id="i-shake" viewBox="0 0 24 24"><path d="M3 12c2-3 4-3 6 0s4 3 6 0 4-3 6 0"/><path d="M3 7c2-2 4-2 6 0M15 17c2 2 4 2 6 0"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12"/></symbol>
+    <symbol id="i-rotl" viewBox="0 0 24 24"><path d="M6 12a6 6 0 1 0 2-4.5"/><path d="M6 4v4h4"/></symbol>
+    <symbol id="i-rotr" viewBox="0 0 24 24"><path d="M18 12a6 6 0 1 1-2-4.5"/><path d="M18 4v4h-4"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
+    <symbol id="i-top" viewBox="0 0 24 24"><path d="M6 4h12M12 20V9M7.5 13.5L12 9l4.5 4.5"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+  </defs>
+</svg>
+<canvas id="fluid" aria-hidden="true"></canvas>
+<div class="bg-fallback" aria-hidden="true"></div>
+
+<header class="top">
+  <a class="back" href="../" aria-label="返回工具合集">← 合集</a>
+  <div class="logo">
+    <h1><i>Mood</i> Desk</h1>
+    <p>赛博电子痛包 · 桌面情绪小组件</p>
+  </div>
+  <p class="greet" id="greet">今天也要被温柔对待</p>
+  <div class="top-actions">
+    <span class="pill" id="today">--</span>
+    <button class="pill btn" id="zenBtn" type="button" aria-pressed="false">◐ 沉浸模式</button>
+    <button class="pill btn" id="aiBtn" type="button"><svg class="ic"><use href="#i-spark"/></svg> AI</button>
+  </div>
+</header>
+
+<main class="bento" id="bento">
+  <!-- 专注时钟 -->
+  <section class="card w-clock" id="clock" aria-labelledby="clockT">
+    <header class="w-head"><span class="w-ico" aria-hidden="true"><svg class="ic"><use href="#i-clock"/></svg></span><h2 id="clockT">专注时钟</h2><small>FOCUS CLOCK</small></header>
+    <div class="clock-body">
+      <div class="ring-wrap">
+        <svg class="ring" viewBox="0 0 240 240" aria-hidden="true">
+          <defs><linearGradient id="ringGrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="var(--c3)"/><stop offset="1" stop-color="var(--c0)"/></linearGradient></defs>
+          <circle cx="120" cy="120" r="104" class="ring-bg"/>
+          <circle cx="120" cy="120" r="104" class="ring-fg" id="ringFg"/>
+          <g id="ticks"></g>
+        </svg>
+        <div class="ring-center">
+          <b id="pomoTime" aria-live="off">25:00</b>
+          <span id="pomoLabel">准备专注</span>
+        </div>
+      </div>
+      <div class="clock-side">
+        <div class="now"><b id="nowTime">--:--</b><span id="nowSec">--</span></div>
+        <p class="now-date" id="nowDate">--</p>
+        <div class="modes" role="radiogroup" aria-label="计时模式">
+          <button type="button" role="radio" data-mode="focus" aria-checked="true">专注 25</button>
+          <button type="button" role="radio" data-mode="short" aria-checked="false">小憩 5</button>
+          <button type="button" role="radio" data-mode="long" aria-checked="false">长休 15</button>
+        </div>
+        <div class="pomo-ctrl">
+          <button class="btn-main" id="pomoGo" type="button">开始专注</button>
+          <button class="btn-ghost" id="pomoReset" type="button" aria-label="重置计时"><svg class="ic"><use href="#i-reset"/></svg></button>
+        </div>
+        <p class="tomatoes" id="tomatoes" aria-live="polite">今天还没有番茄，开始第一个吧</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 今日运势 -->
+  <section class="card w-fortune" id="fortune" aria-labelledby="fortT">
+    <header class="w-head"><span class="w-ico" aria-hidden="true"><svg class="ic"><use href="#i-spark"/></svg></span><h2 id="fortT">今日运势</h2><small>DAILY FORTUNE</small></header>
+    <div class="flip" id="flip">
+      <div class="flip-inner">
+        <div class="f-front">
+          <div class="foil" aria-hidden="true"></div>
+          <p class="f-no" id="fNo">No.000</p>
+          <p class="f-title">抽一张<br>今日签</p>
+          <p class="f-hint">同一天 · 同一个名字 · 结果不变</p>
+          <label class="f-name"><span class="sr">你的昵称</span><input id="fName" maxlength="12" placeholder="输入昵称（可选）" autocomplete="nickname"></label>
+          <button class="btn-main" id="fDraw" type="button">翻开今日签</button>
+        </div>
+        <div class="f-back" id="fBack" aria-live="polite"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 极简记账 -->
+  <section class="card w-ledger" id="ledger" aria-labelledby="ledT">
+    <header class="w-head"><span class="w-ico" aria-hidden="true"><svg class="ic"><use href="#i-coin"/></svg></span><h2 id="ledT">极简记账</h2><small>MINI LEDGER</small><button class="w-tool" id="budgetBtn" type="button">预算 ¥<b id="budgetVal">120</b>/天</button></header>
+    <form class="led-input" id="ledForm" autocomplete="off">
+      <label class="sr" for="ledText">记一笔</label>
+      <input id="ledText" placeholder="奶茶 18、地铁 4 、+3000 工资" enterkeyhint="done">
+      <button class="btn-main" type="submit">记一笔</button>
+    </form>
+    <div class="led-quick" id="ledQuick" aria-label="快捷分类"></div>
+    <div class="led-stats">
+      <div class="led-today"><small>今日支出</small><b id="ledToday">¥0</b><div class="budget-bar" aria-hidden="true"><i id="budgetFill"></i></div><span id="ledMood">😌 稳稳的</span></div>
+      <div class="donut-wrap"><svg class="donut" id="donut" viewBox="0 0 120 120" role="img" aria-label="本月分类占比"></svg><div class="donut-c"><small>本月</small><b id="ledMonth">¥0</b></div></div>
+    </div>
+    <ul class="led-legend" id="ledLegend"></ul>
+    <ul class="led-list" id="ledList" aria-label="今日账单"></ul>
+  </section>
+
+  <!-- 电子痛包 -->
+  <section class="card w-bag" id="bagCard" aria-labelledby="bagT">
+    <header class="w-head"><span class="w-ico" aria-hidden="true"><svg class="ic"><use href="#i-bag"/></svg></span><h2 id="bagT">电子痛包</h2><small>HOLO ITABAG</small>
+      <div class="w-tools">
+        <button class="w-tool" id="bagArrange" type="button"><svg class="ic"><use href="#i-grid"/></svg>对称排列</button>
+        <button class="w-tool" id="bagShake" type="button"><svg class="ic"><use href="#i-shake"/></svg>摇一摇</button>
+        <button class="w-tool" id="bagClear" type="button"><svg class="ic"><use href="#i-trash"/></svg>清空</button>
+      </div>
+    </header>
+    <div class="bag-layout">
+      <div class="bag-stage">
+        <svg class="bag-handle" viewBox="0 0 400 80" preserveAspectRatio="none" aria-hidden="true"><path d="M80 80 C80 10, 320 10, 320 80" fill="none" stroke="currentColor" stroke-width="14" stroke-linecap="round"/></svg>
+        <div class="bag" id="bag" role="list" aria-label="痛包里的吧唧，可拖动摆放">
+          <div class="bag-window" aria-hidden="true"></div>
+        </div>
+        <p class="bag-tip">拖动摆放 · 点击选中后可旋转 / 缩放 / 删除 · 光泽会跟着指针流动</p>
+      </div>
+      <aside class="bag-maker" aria-label="制作吧唧">
+        <div class="mk-tabs" role="tablist">
+          <button role="tab" type="button" data-mk="emoji" aria-selected="true">表情</button>
+          <button role="tab" type="button" data-mk="text" aria-selected="false">文字</button>
+          <button role="tab" type="button" data-mk="img" aria-selected="false">图片</button>
+        </div>
+        <div class="mk-panel" data-panel="emoji"><div class="emoji-grid" id="emojiGrid"></div></div>
+        <div class="mk-panel" data-panel="text" hidden>
+          <label class="sr" for="mkText">吧唧文字</label>
+          <input id="mkText" maxlength="6" placeholder="暴富 / 早睡 / 上岸">
+          <div class="mk-presets" id="textPresets"></div>
+        </div>
+        <div class="mk-panel" data-panel="img" hidden>
+          <label class="upload" id="upload"><input type="file" id="mkFile" accept="image/*" hidden><span>＋ 上传自家崽崽图</span><small>本地处理，不上传</small></label>
+        </div>
+        <label class="mk-row"><span>环形字</span><input id="mkRing" maxlength="24" placeholder="MOOD DESK · 2025"></label>
+        <div class="mk-row"><span>底色</span><div class="mk-colors" id="mkColors" role="radiogroup" aria-label="吧唧底色"></div></div>
+        <div class="mk-row"><span>形状</span><div class="seg" id="mkShape" role="radiogroup" aria-label="形状"><button type="button" role="radio" data-v="round" aria-checked="true">圆吧</button><button type="button" role="radio" data-v="square" aria-checked="false">方吧</button></div></div>
+        <button class="btn-main wide" id="mkAdd" type="button">＋ 放进痛包</button>
+        <div class="badge-tools" id="badgeTools" hidden>
+          <span>已选中</span>
+          <button type="button" data-act="rotL" aria-label="向左旋转"><svg class="ic"><use href="#i-rotl"/></svg></button>
+          <button type="button" data-act="rotR" aria-label="向右旋转"><svg class="ic"><use href="#i-rotr"/></svg></button>
+          <button type="button" data-act="big" aria-label="放大"><svg class="ic"><use href="#i-plus"/></svg></button>
+          <button type="button" data-act="small" aria-label="缩小"><svg class="ic"><use href="#i-minus"/></svg></button>
+          <button type="button" data-act="front" aria-label="置顶"><svg class="ic"><use href="#i-top"/></svg></button>
+          <button type="button" data-act="del" aria-label="删除"><svg class="ic"><use href="#i-x"/></svg></button>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- 审美调节台 -->
+  <section class="card w-tuner" id="tuner" aria-labelledby="tunT">
+    <header class="w-head"><span class="w-ico" aria-hidden="true"><svg class="ic"><use href="#i-knob"/></svg></span><h2 id="tunT">审美调节台</h2><small>AESTHETIC CONSOLE</small>
+      <div class="w-tools">
+        <button class="w-tool" id="tUndo" type="button" aria-label="撤销"><svg class="ic"><use href="#i-undo"/></svg><span>撤销</span></button>
+        <button class="w-tool" id="tShare" type="button" aria-label="分享主题链接"><svg class="ic"><use href="#i-share"/></svg><span>分享</span></button>
+      </div>
+    </header>
+    <div class="t-eq" id="tEq" aria-hidden="true"></div>
+    <div class="t-log" id="tLog" aria-live="polite"></div>
+    <form class="t-input" id="tForm" autocomplete="off">
+      <label class="sr" for="tText">用一句话描述想要的感觉</label>
+      <input id="tText" placeholder="说点感觉：再温柔一点 / 太亮了 / 赛博一点">
+      <button class="btn-main" type="submit" aria-label="发送">↵</button>
+    </form>
+    <div class="t-sugs" id="tSugs"></div>
+    <div class="palettes" id="palettes" role="radiogroup" aria-label="色板"></div>
+    <details class="t-fine" id="tFine">
+      <summary>精调参数 <small>10 项</small></summary>
+      <div class="sliders" id="sliders"></div>
+    </details>
+  </section>
+</main>
+
+<footer class="foot">Mood Desk · 所有数据只存在你的浏览器 · <a href="../">Vibe Coding Lab</a></footer>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script src="../assets/vibe-ai.js"></script>
+<script src="tuner.js"></script>
+<script src="fluid.js"></script>
+<script src="fortune.js"></script>
+<script src="bag.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
